@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Inside the Machine — An Interactive Digital Design and Computer Architecture (DDCA) Engineering Laboratory. Explore the Hardware. Understand the Logic. Experience the Architecture." />
+  <title>Inside the Machine — a 3D computer you can take apart</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/student.css" />
+  <meta property="og:title" content="Inside the Machine — a 3D computer you can take apart" />
+  <meta property="og:description" content="Photoreal WebGL2 computer, zero dependencies. From heat-sink to silicon to a live RISC-V datapath." />
+  <meta property="og:image" content="assets/social-preview.png" />
+  <meta name="theme-color" content="#05080e" />
+</head>
+<body>
+<div class="itm-shell">
+  <!-- TOP BAR -->
+  <header class="itm-header">
+    <button type="button" class="itm-iconbtn itm-menu-btn" id="btnMenu" aria-label="Open navigation" aria-controls="itmSide" aria-expanded="false">☰</button>
+    <div class="itm-brand">
+      <div class="itm-logo">ITM</div>
+      <div>
+        <h1 class="itm-brand-title">Inside the Machine</h1>
+        <div class="itm-brand-sub">Digital Design &amp; Computer Architecture · v5.1</div>
+      </div>
+    </div>
+
+    <button type="button" class="itm-search" id="btnSearch" aria-label="Search lessons, terms and instructions">
+      <span class="itm-search-ico">⌕</span><span class="itm-search-txt">Search lessons, terms, instructions…</span><kbd>Ctrl K</kbd>
+    </button>
+
+    <div class="itm-header-controls">
+      <div class="itm-overall" id="overallPill" title="Your overall progress (saved in this browser)">
+        <svg viewBox="0 0 36 36" class="ring" aria-hidden="true"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring-fg" id="overallRing" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="0 100"/></svg>
+        <span id="overallPct">0%</span>
+      </div>
+      <div class="itm-level-switch" role="group" aria-label="Explanation level">
+        <button type="button" class="itm-level-btn active" data-level="beginner" title="Plain-language analogies">Beginner</button>
+        <button type="button" class="itm-level-btn" data-level="engineering" title="Course-level engineering explanation">Engineering</button>
+        <button type="button" class="itm-level-btn" data-level="advanced" title="Transistor / implementation detail">Advanced</button>
+      </div>
+      <button type="button" class="itm-btn amber" id="profModeBtn" title="Guided demo script for lectures">🎓 Present</button>
+    </div>
+  </header>
+
+  <div class="itm-body">
+  <div class="itm-scrim" id="sideScrim"></div>
+  <!-- SIDEBAR NAVIGATION -->
+  <aside class="itm-side" id="itmSide" aria-label="Course navigation">
+    <nav class="itm-navbar">
+      <button type="button" class="itm-nav-item active" data-section="sec-home"><span class="nav-num">⌂</span><span class="nav-txt">Home &amp; learning path</span></button>
+
+      <div class="nav-group">Learn · six modules</div>
+      <button type="button" class="itm-nav-item" data-section="sec-mod1"><span class="nav-num">1</span><span class="nav-txt">Digital fundamentals<small>Binary · gates · NAND</small></span><span class="nav-state"></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-mod2"><span class="nav-num">2</span><span class="nav-txt">Combinational logic<small>K-maps · adders · ALU</small></span><span class="nav-state"></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-mod3"><span class="nav-num">3</span><span class="nav-txt">Sequential logic<small>Flip-flops · FSM · PC</small></span><span class="nav-state"></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-mod4"><span class="nav-num">4</span><span class="nav-txt">Memory organization<small>Register file · RAM · ROM</small></span><span class="nav-state"></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-mod5"><span class="nav-num">5</span><span class="nav-txt">Computer org &amp; RISC-V<small>ISA · datapath · control</small></span><span class="nav-state"></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-mod6"><span class="nav-num">6</span><span class="nav-txt">Performance &amp; advanced<small>Iron Law · pipeline · MMIO</small></span><span class="nav-state"></span></button>
+
+      <div class="nav-group">Labs · see it run</div>
+      <button type="button" class="itm-nav-item" data-section="sec-cpu-lab"><span class="nav-num">◈</span><span class="nav-txt">CPU architecture lab<small>Live 3D RV32I datapath</small></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-logic-lab"><span class="nav-num">◧</span><span class="nav-txt">Digital logic lab<small>Gate-level simulator</small></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-hw-explorer"><span class="nav-num">◉</span><span class="nav-txt">3D hardware explorer<small>Take a computer apart</small></span></button>
+
+      <div class="nav-group">Practice</div>
+      <button type="button" class="itm-nav-item" data-section="sec-experiments"><span class="nav-num">⚗</span><span class="nav-txt">Practical experiments<small>8 lab manuals · viva</small></span></button>
+      <button type="button" class="itm-nav-item" data-section="sec-quizzes"><span class="nav-num">✓</span><span class="nav-txt">Quizzes<small>Question bank</small></span><span class="nav-state" id="quizNavState"></span></button>
+
+      <div class="nav-group">Study tools</div>
+      <button type="button" class="itm-nav-item" data-section="sec-toolkit"><span class="nav-num">✦</span><span class="nav-txt">Study toolkit<small>Glossary · RISC-V card · flashcards</small></span></button>
+    </nav>
+    <div class="side-foot">
+      <button type="button" class="side-link" id="btnShortcuts">⌨ Shortcuts <kbd>?</kbd></button>
+      <button type="button" class="side-link" id="btnResetStudy">↺ Reset my progress</button>
+    </div>
+  </aside>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="itm-main">
+    <!-- SECTION 01: HOME — INSIDE THE COMPUTER -->
+    <section class="itm-section active" id="sec-home">
+      <div class="hero">
+        <div class="hero-stage"><div class="viewport-canvas" id="home3dCanvas"></div></div>
+        <div class="hero-copy">
+          <div class="hero-eyebrow"><span class="pulse"></span> OPEN SOURCE · ZERO DEPENDENCIES · RUNS OFFLINE</div>
+          <h2>See inside<br><span class="grad">the machine.</span></h2>
+          <p>A photoreal 3D computer you can take apart: from heat-sink to silicon to a live RISC-V datapath executing real instructions. Hand-written WebGL2, no libraries.</p>
+          <div class="hero-cta">
+            <button type="button" class="itm-btn hero-primary" id="btnHomeTour">▶ Take the 60-second tour</button>
+            <button type="button" class="itm-btn" data-goto-sec="sec-cpu-lab">Open the CPU Lab</button>
+            <button type="button" class="itm-btn" data-goto-sec="sec-hw-explorer">3D Explorer</button>
+          </div>
+          <ul class="hero-stats">
+            <li><b>8</b><span>hardware parts</span></li><li><b>16</b><span>live datapath buses</span></li><li><b>6</b><span>course modules</span></li><li><b>0</b><span>dependencies</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div id="homeCompInspector" class="card" style="margin-bottom:16px"></div>
+
+      <!-- Student dashboard (rendered by js/student.js) -->
+      <div id="homePath"></div>
+
+      <!-- Six-Module Connected Journey Cards -->
+      <div class="eyebrow" style="margin:22px 0 8px">THE SIX-MODULE CONNECTED DDCA CURRICULUM</div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="eyebrow">MODULE 01 · S01 & S07</div>
+          <h3 class="card-title">Digital Design Fundamentals</h3>
+          <p class="card-body">Binary/Octal/Hex conversions, two's complement, CMOS voltage thresholds, logic gates, Boolean algebra, NAND universality, RISC-V intro, Ripes & Logisim Evolution.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod1">Open Module 1 →</button>
+        </div>
+        <div class="card">
+          <div class="eyebrow">MODULE 02 · S18–S32</div>
+          <h3 class="card-title">Combinational Logic Design</h3>
+          <p class="card-body">Truth tables, 4-variable Karnaugh Maps, Half/Full Adders, 4-bit Ripple-Carry Adder/Subtractor, Multiplexers, Decoders, Comparators, and ALU design.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod2">Open Module 2 →</button>
+        </div>
+        <div class="card">
+          <div class="eyebrow">MODULE 03 · S33–S46</div>
+          <h3 class="card-title">Sequential Logic Design</h3>
+          <p class="card-body">SR/D Latches, rising-edge D Flip-Flops, clocking, multi-bit registers, SISO/SIPO shift registers, synchronous counters, Program Counter (PC), and Moore/Mealy FSMs.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod3">Open Module 3 →</button>
+        </div>
+        <div class="card">
+          <div class="eyebrow">MODULE 04 · S49–S58</div>
+          <h3 class="card-title">Memory Organization</h3>
+          <p class="card-body">32×32-bit RV32I Register File (2 read ports, 1 write port, hardwired x0=0), RAM vs. ROM, 6T SRAM vs. 1T1C DRAM, Memory Hierarchy, and Von Neumann vs. Harvard.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod4">Open Module 4 →</button>
+        </div>
+        <div class="card" style="border-color:var(--border-strong)">
+          <div class="eyebrow">MODULE 05 · PRIORITY · S63–S74</div>
+          <h3 class="card-title">Computer Organization & RISC-V</h3>
+          <p class="card-body">ISA vs. Microarchitecture, x0–x31 ABI registers, R/I/S/B/U/J formats, Two-Pass Assembler, `ADD x3, x1, x2` (10+20=30) walkthrough, Single-Cycle Datapath & Control Unit.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod5">Open Module 5 →</button>
+        </div>
+        <div class="card">
+          <div class="eyebrow">MODULE 06 · S75–S88</div>
+          <h3 class="card-title">Processor Performance & Advanced</h3>
+          <p class="card-body">Iron Law (IC × CPI × Clock Period), Program 1/2/3 validation, XOR & JAL extensions, Memory-Mapped I/O LEDs at 0x00000100, 5-Stage Pipelining & Cache Locality.</p>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod6">Open Module 6 →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTIONS 02–07: THE SIX CORE DDCA MODULES -->
+    <section class="itm-section" id="sec-mod1"><div id="mod1Content"></div></section>
+    <section class="itm-section" id="sec-mod2"><div id="mod2Content"></div></section>
+    <section class="itm-section" id="sec-mod3"><div id="mod3Content"></div></section>
+    <section class="itm-section" id="sec-mod4"><div id="mod4Content"></div></section>
+    <section class="itm-section" id="sec-mod5"><div id="mod5Content"></div></section>
+    <section class="itm-section" id="sec-mod6"><div id="mod6Content"></div></section>
+
+    <!-- SECTION 08: CPU ARCHITECTURE LABORATORY -->
+    <section class="itm-section" id="sec-cpu-lab">
+      <div class="card" style="margin-bottom:14px">
+        <div class="badge-row">
+          <span class="src-badge src-course">A · Course Single-Cycle RV32I Datapath (S72–S82)</span>
+          <span class="src-badge src-sim">D · Live Two-Pass Assembler & 3D Datapath Simulator</span>
+        </div>
+        <div class="eyebrow">SECTION 08 · CPU ARCHITECTURE LABORATORY</div>
+        <h2 style="margin:4px 0 8px;font-size:22px">Interactive 3D Single-Cycle RISC-V Processor & Live Assembler</h2>
+        <div class="grid-3">
+          <!-- Column 1: Program & Assembler Console -->
+          <div class="card">
+            <div class="eyebrow">01 / INSTRUCTION ROM & ASSEMBLER</div>
+            <select id="cpuPresetSelect" class="input-field" style="margin:8px 0" aria-label="Select preset RISC-V program">
+              <option value="progA">Course Program A · RegFile + ALU + RAM (S75)</option>
+              <option value="progB">Course Program B · XOR + JAL Redirect (S78)</option>
+              <option value="progC">Course Program C · MMIO LEDs at 0x100 (S80)</option>
+              <option value="progAdd30">Flagship Demo · ADD x3, x1, x2 (10+20=30)</option>
+              <option value="progLoop">Program D · Loop with SLT & BNE</option>
+            </select>
+            <textarea id="cpuCustomAsm" class="input-field" rows="6" style="font-family:var(--font-mono)">ADDI x1, x0, 8
+ADDI x2, x0, 3
+AND  x3, x1, x2
+OR   x4, x1, x2
+SW   x4, 0(x0)
+LW   x6, 0(x0)</textarea>
+            <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+              <button type="button" class="itm-btn" id="cpuAssembleLoadBtn">Assemble & Load</button>
+              <button type="button" class="itm-btn primary" id="cpuStepBtn">Step Instruction ▶</button>
+              <button type="button" class="itm-btn" id="cpuRunBtn">Auto Run ▶▶</button>
+              <button type="button" class="itm-btn" id="cpuResetBtn">Reset ↺</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;font:11px var(--font-mono);margin:8px 0">
+              <span>PC: <b id="cpuPcVal" style="color:var(--cyan)">0x00</b></span>
+              <span>Cycles: <b id="cpuCyclesVal" style="color:var(--emerald)">0</b></span>
+            </div>
+            <div id="cpuProgList" style="max-height:220px;overflow-y:auto"></div>
+          </div>
+
+          <!-- Column 2: 3D Architectural Datapath Viewport + 8-Step Trace -->
+          <div class="card">
+            <div class="eyebrow">02 / 3D ARCHITECTURAL DATAPATH & 8-STAGE EXECUTION TRACE</div>
+            <div class="viewport-stage" style="height:clamp(300px,46vh,460px);margin:8px 0">
+              <div class="viewport-canvas" id="cpuLab3dCanvas"></div>
+            </div>
+            <div class="eyebrow">CONTROL UNIT SIGNALS</div>
+            <div class="mono-readout" id="cpuCtrlReadout" style="margin:4px 0 8px"></div>
+            <div class="eyebrow">8-STEP FETCH–DECODE–EXECUTE TRACE</div>
+            <div class="mono-readout" id="cpuTraceSteps"></div>
+          </div>
+
+          <!-- Column 3: 32 Registers, Data Memory & MMIO LEDs -->
+          <div class="card">
+            <div class="eyebrow">03 / 32 RV32I INTEGER REGISTERS (x0–x31)</div>
+            <div id="cpuRegGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:8px 0;max-height:260px;overflow-y:auto"></div>
+            <div class="eyebrow" style="margin-top:8px">DATA MEMORY (WORD-ALIGNED SRAM)</div>
+            <div class="mono-readout" id="cpuMemReadout" style="margin:4px 0 8px"></div>
+            <div class="eyebrow">MEMORY-MAPPED I/O PERIPHERAL (0x00000100)</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#06111d;border:1px solid var(--border);border-radius:8px;margin-top:4px">
+              <div id="cpuLedDots"></div>
+              <span id="cpuLedVal" style="font:700 11px var(--font-mono);color:var(--cyan)">0x00000100 LEDs = 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 09: DIGITAL LOGIC LABORATORY -->
+    <section class="itm-section" id="sec-logic-lab">
+      <div class="card" style="margin-bottom:16px">
+        <div class="badge-row">
+          <span class="src-badge src-sim">D · Unified Combinational & Sequential Logic Workbench</span>
+          <span class="src-badge src-course">Modules 1, 2, 3 & 4</span>
+        </div>
+        <div class="eyebrow">SECTION 09 · DIGITAL LOGIC LABORATORY</div>
+        <h2 style="margin:4px 0 8px;font-size:22px">Interactive Combinational, Arithmetic & Sequential Circuit Bench</h2>
+        <p style="font-size:12.5px;color:var(--text-secondary);margin:0 0 14px">
+          Jump directly to any specialized interactive circuit bench or launch the standalone 8-Bit Gate-Level Microcomputer Microscope:
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod1">1. Radix Converter & Universal NAND Bench (Mod 1) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod2">2. 4-Variable K-Map & 4-Bit Ripple Adder/Subtractor (Mod 2) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod3">3. D Flip-Flop, SISO/SIPO Shift Register & FSM (Mod 3) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod4">4. 32×32 Register File & RAM/ROM Explorer (Mod 4) →</button>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="eyebrow">COMBINATIONAL TRUTH-TABLE & HALF/FULL ADDER REFERENCE</div>
+            <h3 class="card-title">1-Bit Half Adder vs. Full Adder Equations</h3>
+            <div class="mono-readout">Half Adder (HA):
+  Sum   = A ⊕ B
+  Carry = A · B
+
+Full Adder (FA):
+  Sum   = A ⊕ B ⊕ Cin
+  Cout  = (A · B) + (Cin · (A ⊕ B))
+
+Two's-Complement Subtraction (A - B):
+  Invert B (B' = B ⊕ Sub) and set Cin = Sub = 1  →  A + ~B + 1</div>
+          </div>
+          <div class="card">
+            <div class="eyebrow">SEQUENTIAL TIMING & CHARACTERISTIC EQUATIONS</div>
+            <h3 class="card-title">Latches, Flip-Flops & Timing Constraints</h3>
+            <div class="mono-readout">SR Latch:     Q(next) = S + (~R · Q)   [Constraint: S · R = 0]
+D Latch:      Q(next) = D              [Transparent while EN = 1]
+D Flip-Flop:  Q(t+1)  = D(t)           [Sampled strictly on CLK ↑]
+
+Timing Margin Equation:
+  T_clk ≥ t_pcq (Clock-to-Q) + t_pd (Max Combinational Delay) + t_su (Setup Time)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 10: 3D HARDWARE EXPLORER -->
+    <section class="itm-section" id="sec-hw-explorer">
+      <div class="card" style="margin-bottom:14px">
+        <div class="badge-row">
+          <span class="src-badge src-sim">D · Interactive 3D PBR Hardware & Dual-Mode CPU Explorer</span>
+          <span class="src-badge src-course">WebGL2 · Procedural PBR · Zero Dependencies</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+          <div>
+            <div class="eyebrow">SECTION 10 · 3D HARDWARE EXPLORER</div>
+            <h2 style="margin:3px 0 0;font-size:21px">Interactive 3D Computer Anatomy & Dual-View CPU Architecture</h2>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="itm-btn primary" id="btnModeDualCpu" data-cur="hardware">CPU View: A · External Package & Die</button>
+            <button type="button" class="itm-btn" id="btnExplodeHw">Exploded View</button>
+            <button type="button" class="itm-btn" id="btnIsolateHw">Isolate Selected</button>
+            <button type="button" class="itm-btn active" id="btnDelidHw">De-Lid CPU IHS</button>
+            <button type="button" class="itm-btn" id="btnResetHwCam">Reset Camera</button>
+          </div>
+        </div>
+
+        <div class="grid-2" style="grid-template-columns:1.45fr 1fr">
+          <div class="viewport-stage" style="height:440px">
+            <div class="viewport-canvas" id="explorer3dCanvas"></div>
+            <div class="viewport-hud-top">
+              <div class="eyebrow">DRAG TO ORBIT · SCROLL TO ZOOM · CLICK ANY PART</div>
+              <div style="font-size:11px;color:var(--text-secondary)">Switch between View A (Physical Package & Die) and View B (Internal Datapath)</div>
+            </div>
+          </div>
+          <div>
+            <div class="eyebrow" style="margin-bottom:6px">SELECT COMPONENT TO INSPECT</div>
+            <div id="hwCompButtons" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
+            <div id="explorerCompInspector" class="card"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 11: PRACTICAL EXPERIMENTS -->
+    <section class="itm-section" id="sec-experiments">
+      <div class="card" style="margin-bottom:16px">
+        <div class="badge-row">
+          <span class="src-badge src-course">A · Supplied Practical Laboratory Manuals (Experiments 1–8)</span>
+          <span class="src-badge src-sim">D · Live Simulator Verification Attached</span>
+        </div>
+        <div class="eyebrow">SECTION 11 · PRACTICAL LABORATORY EXPERIMENTS</div>
+        <h2 style="margin:4px 0 6px;font-size:22px">DDCA Practical Workbench & Viva-Voce Preparation</h2>
+        <p style="font-size:12.5px;color:var(--text-secondary);margin:0">
+          Each experiment includes its Aim, Learning Objectives, Required Concepts, Circuit/Architecture Diagram, Step-by-Step Procedure, Expected Output, Live Simulation Verification, Observation, Conclusion, and Viva Questions.
+        </p>
+      </div>
+      <div id="experimentsListContainer"></div>
+    </section>
+
+    <!-- SECTION 12: QUIZZES & ASSESSMENTS -->
+    <section class="itm-section" id="sec-quizzes">
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div>
+            <div class="eyebrow">SECTION 12 · QUIZZES & SELF-ASSESSMENT</div>
+            <h2 style="margin:4px 0 4px;font-size:22px">Module-Wise Engineering Question Bank & Progress Tracker</h2>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0">Covers binary conversions, NAND universality, K-Maps, adders, sequential flip-flops/FSMs, register files, RISC-V encoding/execution, MMIO, and the Iron Law.</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="src-badge src-course" id="quizScoreBanner" style="font-size:11px;padding:6px 10px">Completed: 0 / 13 | Score: 0 / 13</span>
+            <button type="button" class="itm-btn" id="resetQuizProgressBtn">Reset Progress</button>
+          </div>
+        </div>
+      </div>
+      <div id="quizListContainer"></div>
+    </section>
+
+    <!-- STUDY TOOLKIT -->
+    <section class="itm-section" id="sec-toolkit">
+      <div class="page-head">
+        <div class="eyebrow">STUDY TOOLKIT</div>
+        <h2>Everything you need open next to your notes</h2>
+        <p>A searchable glossary, a RISC-V reference card with a live encoder/decoder, a number lab, a formula sheet and spaced-repetition flashcards. Works offline; your progress stays in this browser.</p>
+      </div>
+      <div class="tk-tabs" role="tablist" id="tkTabs">
+        <button type="button" role="tab" class="tk-tab active" data-tk="glossary">Glossary</button>
+        <button type="button" role="tab" class="tk-tab" data-tk="riscv">RISC-V card</button>
+        <button type="button" role="tab" class="tk-tab" data-tk="codec">Encode / decode</button>
+        <button type="button" role="tab" class="tk-tab" data-tk="numbers">Number lab</button>
+        <button type="button" role="tab" class="tk-tab" data-tk="formulas">Formulas</button>
+        <button type="button" role="tab" class="tk-tab" data-tk="flash">Flashcards</button>
+      </div>
+      <div class="tk-pane active" id="tk-glossary"></div>
+      <div class="tk-pane" id="tk-riscv"></div>
+      <div class="tk-pane" id="tk-codec"></div>
+      <div class="tk-pane" id="tk-numbers"></div>
+      <div class="tk-pane" id="tk-formulas"></div>
+      <div class="tk-pane" id="tk-flash"></div>
+    </section>
+  </main>
+  </div><!-- /itm-body -->
+</div>
+
+<!-- PROFESSOR PRESENTATION MODE MODAL (PART 7) -->
+<div class="itm-modal-backdrop" id="profModal" role="dialog" aria-modal="true" aria-labelledby="profModalTitle">
+  <div class="itm-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px">
+      <div>
+        <div class="eyebrow">PART 7 · ACADEMIC DEMONSTRATION & CURRICULUM ALIGNMENT</div>
+        <h2 id="profModalTitle" style="margin:4px 0 0;font-size:20px">Professor Presentation & Walkthrough Mode</h2>
+      </div>
+      <button type="button" class="itm-btn" id="closeProfModal">Close ✕</button>
+    </div>
+
+    <div class="badge-row">
+      <span class="src-badge src-course">A · Primary Source: Supplied 6-Module DDCA Course Materials</span>
+      <span class="src-badge src-beginner">B · Beginner-First 3-Tier Explanations</span>
+      <span class="src-badge src-advanced">C · Clearly Labeled Supplementary Topics</span>
+      <span class="src-badge src-sim">D · Verified Deterministic Simulation Engines</span>
+    </div>
+
+    <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.65">
+      This platform is structured around the six Digital Design & Computer Architecture (DDCA) course modules, lecture slides (<code>S01</code> through <code>S88</code>), and practical design manuals. It strictly distinguishes course-derived content from supplementary explanations and simulated hardware models, and makes no unverified claims of institutional accreditation.
+    </p>
+
+    <div class="grid-2" style="margin-top:12px">
+      <div class="card">
+        <div class="eyebrow">1-CLICK CLASSROOM DEMONSTRATION SHORTCUTS</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod1" onclick="document.getElementById('profModal').classList.remove('open')">1. Demonstrate Module 1 (Binary, Gates & Universal NAND) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod2" onclick="document.getElementById('profModal').classList.remove('open')">2. Demonstrate Module 2 (4-Var K-Map & Ripple Adder) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod3" onclick="document.getElementById('profModal').classList.remove('open')">3. Demonstrate Module 3 (D Flip-Flops, Shift Reg & FSM) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod4" onclick="document.getElementById('profModal').classList.remove('open')">4. Demonstrate Module 4 (32×32 Register File & RAM/ROM) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod5" onclick="document.getElementById('profModal').classList.remove('open')">5. Demonstrate Module 5 (RV32I Assembler & ADD x3,x1,x2=30) →</button>
+          <button type="button" class="itm-btn primary" data-goto-sec="sec-mod6" onclick="document.getElementById('profModal').classList.remove('open')">6. Demonstrate Module 6 (Iron Law, 5-Stage Pipeline & MMIO) →</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="eyebrow">TECHNICAL ARCHITECTURE & VERIFICATION SUMMARY</div>
+        <div class="mono-readout" style="margin-top:8px">• Modular ES6 Architecture:
+  - css/styles.css (Precision Dark UI System)
+  - js/course-data.js (6 Modules, 10-Step Pedagogy, 12 Slides)
+  - js/digital-logic-sim.js (Radix, Gates, K-Map, Adders, Seq)
+  - js/riscv-engine.js (2-Pass RV32I Assembler + Single-Cycle/Pipe)
+  - js/gl/* (hand-written WebGL2 engine) + js/hardware-3d.js (3D facade)
+  - js/experiments-quizzes.js (8 Lab Manuals + 13 Assessments)
+• Static Deployment: 100% GitHub Pages Ready (.nojekyll)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="itm-toast" id="itmToast" role="status" aria-live="polite"></div>
+
+<script src="js/course-data.js"></script>
+<script src="js/digital-logic-sim.js"></script>
+<script src="js/riscv-engine.js"></script>
+<script src="js/gl/math.js"></script>
+<script src="js/gl/geometry.js"></script>
+<script src="js/gl/engine.js"></script>
+<script src="js/gl/textures.js"></script>
+<script src="js/gl/scene-computer.js"></script>
+<script src="js/gl/scene-datapath.js"></script>
+<script src="js/hardware-data.js"></script>
+<script src="js/hardware-3d.js"></script>
+<script src="js/experiments-quizzes.js"></script>
+<script src="js/student-data.js"></script>
+<script src="js/app.js"></script>
+<script src="js/student.js"></script>
+</body>
+</html>

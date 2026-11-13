@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this project in teaching or research, please cite the repository release. Replace the author and repository fields after publishing."
+title: "Inside the Machine: 3D Computer and RISC-V Architecture Lab"
+type: software
+authors:
+  - family-names: "Project Maintainer"
+    given-names: "Inside the Machine"
+license: MIT
+version: 1.0.0
+repository-code: "https://github.com/OWNER/REPOSITORY"

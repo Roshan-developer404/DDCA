@@ -1,0 +1,2561 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gate-Level Microscope — 8-bit Teaching CPU</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #060911;
+      color: #E2E8F0;
+      overflow: hidden;
+      user-select: none;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom Subtle Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.35);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.65);
+    }
+    .glass-panel {
+      background: rgba(11, 15, 25, 0.84);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7);
+    }
+    .neon-border-cyan {
+      border-color: rgba(0, 245, 212, 0.45);
+      box-shadow: 0 0 14px rgba(0, 245, 212, 0.15);
+    }
+    .neon-border-amber {
+      border-color: rgba(245, 158, 11, 0.5);
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.18);
+    }
+    .neon-border-rose {
+      border-color: rgba(244, 63, 94, 0.6);
+      box-shadow: 0 0 16px rgba(244, 63, 94, 0.25);
+    }
+    .stage-pill {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .stage-pill.active {
+      background: linear-gradient(135deg, rgba(0, 245, 212, 0.22), rgba(56, 189, 248, 0.18));
+      border-color: #00F5D4;
+      color: #00F5D4;
+      box-shadow: 0 0 14px rgba(0, 245, 212, 0.35);
+      transform: translateY(-1px);
+    }
+    .label-3d {
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.2s ease;
+      z-index: 10;
+    }
+    input[type="range"] {
+      accent-color: #00F5D4;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden select-none">
+
+  <!-- 3D WebGL Viewport Container -->
+  <div id="canvas-container" class="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+  <!-- Floating 3D HTML Telemetry Labels Overlay -->
+  <div id="labels-overlay" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+  <!-- Raycast 3D Hover Tooltip (Gate Truth Table & Wire Telemetry) -->
+  <div id="hover-tooltip" class="hidden fixed z-50 pointer-events-none glass-panel rounded-lg p-3 text-xs max-w-xs border border-cyan-400/40 shadow-2xl">
+    <div class="flex items-center justify-between gap-2 border-b border-slate-700/80 pb-1.5 mb-1.5">
+      <span id="tt-title" class="font-bold text-cyan-300 font-mono-code">COMPONENT</span>
+      <span id="tt-badge" class="px-1.5 py-0.5 text-[10px] rounded bg-cyan-500/20 text-cyan-200 font-mono-code">LAYER</span>
+    </div>
+    <div id="tt-body" class="space-y-1 text-slate-300 font-mono-code text-[11px]"></div>
+    <div id="tt-truthtable" class="mt-2 pt-1.5 border-t border-slate-800 hidden"></div>
+  </div>
+
+  <!-- TOP BAR: Title, 5-Stage Pipeline Progress, Camera Bookmarks -->
+  <header class="relative z-20 flex flex-wrap items-center justify-between gap-2 px-3 py-2 glass-panel border-b border-slate-800/80">
+    <!-- Brand & Architecture Summary -->
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <svg class="w-5 h-5 text-slate-950" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-bold tracking-tight text-white">GATE-LEVEL MICROSCOPE</h1>
+          <span class="hidden sm:inline-block text-[10px] font-mono-code uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Custom 8-bit teaching CPU · not RV32I</span>
+        </div>
+        <p id="story-banner" class="text-[11px] text-slate-400 font-mono-code truncate max-w-[260px] sm:max-w-md md:max-w-xl">
+          8-bit educational microcomputer model. Press a key to follow the simulated IRQ → CPU → ALU → display-buffer path.
+        </p>
+      </div>
+    </div>
+
+    <!-- Center: Explicit 5-Stage Pipeline Indicator -->
+    <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800">
+      <div id="stage-T0" class="stage-pill px-2 py-1 rounded text-[10px] font-mono-code font-semibold border border-transparent text-slate-400">
+        T0:FETCH
+      </div>
+      <span class="text-slate-600 text-[10px]">→</span>
+      <div id="stage-T1" class="stage-pill px-2 py-1 rounded text-[10px] font-mono-code font-semibold border border-transparent text-slate-400">
+        T1:DECODE
+      </div>
+      <span class="text-slate-600 text-[10px]">→</span>
+      <div id="stage-T2" class="stage-pill px-2 py-1 rounded text-[10px] font-mono-code font-semibold border border-transparent text-slate-400">
+        T2:EXECUTE
+      </div>
+      <span class="text-slate-600 text-[10px]">→</span>
+      <div id="stage-T3" class="stage-pill px-2 py-1 rounded text-[10px] font-mono-code font-semibold border border-transparent text-slate-400">
+        T3:MEMORY
+      </div>
+      <span class="text-slate-600 text-[10px]">→</span>
+      <div id="stage-T4" class="stage-pill px-2 py-1 rounded text-[10px] font-mono-code font-semibold border border-transparent text-slate-400">
+        T4:WRITEBACK
+      </div>
+      <div id="stage-INT" class="hidden ml-1 px-2 py-1 rounded text-[10px] font-mono-code font-bold bg-rose-500/20 border border-rose-500 text-rose-300 animate-pulse">
+        IRQ/INT_ACK
+      </div>
+    </div>
+
+    <!-- Right: Semantic Zoom & Camera Bookmarks -->
+    <div class="flex items-center gap-1">
+      <button id="cam-macro" data-cam="macro" class="cam-btn px-2.5 py-1 rounded text-xs font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 transition">
+        1. Macro
+      </button>
+      <button id="cam-micro" data-cam="micro" class="cam-btn px-2.5 py-1 rounded text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">
+        2. Micro (CPU)
+      </button>
+      <button id="cam-nano" data-cam="nano" class="cam-btn px-2.5 py-1 rounded text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-slate-500 transition">
+        3. Nano (ALU Gates)
+      </button>
+      <button id="cam-chase" data-cam="chase" class="cam-btn px-2.5 py-1 rounded text-xs font-medium bg-slate-800/80 text-amber-300 border border-amber-500/40 hover:bg-amber-500/20 transition flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+        4. Signal Chase
+      </button>
+    </div>
+
+    <div class="flex items-center gap-1.5 ml-auto">
+      <a href="index.html" class="px-2.5 py-1.5 rounded text-[10px] font-mono-code text-slate-300 border border-slate-700 bg-slate-900/80 hover:border-cyan-400">01 · Computer</a>
+      <a href="cpu-lab.html" class="px-2.5 py-1.5 rounded text-[10px] font-mono-code text-slate-300 border border-slate-700 bg-slate-900/80 hover:border-cyan-400">02 · RISC-V CPU</a>
+      <a href="learn.html" class="px-2.5 py-1.5 rounded text-[10px] font-mono-code text-slate-300 border border-slate-700 bg-slate-900/80 hover:border-cyan-400">03 · Learn</a>
+    </div>
+  </header>
+
+  <!-- LEFT DOCK: 4x4 Matrix Keypad, Debounce Filter & Anatomical Layer Peel Toggles -->
+  <aside id="left-panel" class="fixed top-16 left-3 z-20 w-64 max-h-[calc(100vh-9.5rem)] overflow-y-auto space-y-2.5 pointer-events-auto">
+    
+    <!-- 4x4 Hardware Matrix Keypad + ASCII Direct Input -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          I/O Matrix Keypad
+        </span>
+        <span id="scan-row-badge" class="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-slate-800 text-amber-300">
+          SCAN: ROW0
+        </span>
+      </div>
+
+      <!-- 4x4 Key Grid -->
+      <div id="keypad-grid" class="grid grid-cols-4 gap-1.5 mb-2.5">
+        <!-- Populated dynamically by JS for 16 matrix keys -->
+      </div>
+
+      <!-- Quick Type String / Physical Keyboard Notice -->
+      <div class="flex items-center gap-1.5 mb-2">
+        <input id="custom-char-input" type="text" maxlength="1" placeholder="Type any key (A-Z, 0-9)" 
+          class="w-full px-2 py-1 text-xs font-mono-code bg-slate-900/90 border border-slate-700 rounded text-cyan-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400" />
+        <button id="btn-send-char" class="px-2.5 py-1 text-xs font-mono-code font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded shrink-0 transition">
+          Fire Key
+        </button>
+      </div>
+
+      <!-- Debounce & Keyboard Buffer Register Status -->
+      <div class="bg-slate-950/70 rounded-lg p-2 border border-slate-800/80 space-y-1.5 text-[11px] font-mono-code">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">DEBOUNCE (4-Bit):</span>
+          <div id="debounce-leds" class="flex items-center gap-1">
+            <span class="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700"></span>
+            <span class="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700"></span>
+            <span class="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700"></span>
+            <span class="w-2.5 h-2.5 rounded-sm bg-slate-800 border border-slate-700"></span>
+            <span id="debounce-val" class="ml-1 text-cyan-300">0/4</span>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">KBD_DATA [0xFF00]:</span>
+          <span id="kbd-data-readout" class="text-cyan-300 font-semibold">0x00 ('·')</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">IRQ1 LINE:</span>
+          <span id="irq-line-readout" class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">0 (LOW)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Anatomical Layer Peel Toggles -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-300">
+          Anatomical Layers
+        </span>
+        <span id="lod-indicator" class="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200">
+          LOD: MACRO
+        </span>
+      </div>
+      <div class="space-y-1.5 text-xs">
+        <label class="flex items-center justify-between cursor-pointer py-0.5 hover:text-white text-slate-300">
+          <span>Packaging & IC Shells</span>
+          <input type="checkbox" id="layer-shells" checked class="rounded accent-cyan-400" />
+        </label>
+        <label class="flex items-center justify-between cursor-pointer py-0.5 hover:text-white text-slate-300">
+          <span>Clock & Control Nervous Sys</span>
+          <input type="checkbox" id="layer-control" checked class="rounded accent-pink-400" />
+        </label>
+        <label class="flex items-center justify-between cursor-pointer py-0.5 hover:text-white text-slate-300">
+          <span>Data & Address Vascular Buses</span>
+          <input type="checkbox" id="layer-buses" checked class="rounded accent-amber-400" />
+        </label>
+        <label class="flex items-center justify-between cursor-pointer py-0.5 hover:text-white text-slate-300">
+          <span>ALU Logic Gate Micro-Arch</span>
+          <input type="checkbox" id="layer-gates" checked class="rounded accent-emerald-400" />
+        </label>
+        <label class="flex items-center justify-between cursor-pointer py-0.5 hover:text-white text-slate-300">
+          <span>Floating Binary/Hex Labels</span>
+          <input type="checkbox" id="layer-labels" checked class="rounded accent-cyan-400" />
+        </label>
+      </div>
+
+      <!-- ALU ISR Operation Mode Selector -->
+      <div class="mt-2.5 pt-2 border-t border-slate-800">
+        <label class="block text-[10px] font-mono-code uppercase text-slate-400 mb-1">
+          ISR ALU Transform (Addr 0x0011):
+        </label>
+        <select id="alu-isr-mode" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-mono-code text-cyan-200 focus:outline-none focus:border-cyan-400">
+          <option value="passthrough">ADD R0, R1 (R1=0x00 Exact Echo)</option>
+          <option value="cipher">ADD R0, R1 (R1=0x01 +1 Next Char)</option>
+          <option value="invert">XOR R0, R1 (R1=0x20 Case Flip)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 2D Mirror of 3D Monitor Output (8-Char VRAM + 5x7 Pixel Preview) -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-300">
+          VRAM Screen [0x38–0x3F]
+        </span>
+        <button id="btn-clear-vram" class="text-[10px] font-mono-code text-slate-400 hover:text-rose-300 transition">
+          Clear
+        </button>
+      </div>
+      <div id="vram-char-slots" class="grid grid-cols-8 gap-1 font-mono-code text-center">
+        <!-- 8 VRAM slots rendered here -->
+      </div>
+    </div>
+  </aside>
+
+  <!-- RIGHT DOCK: CPU Register File, Tri-Bus Telemetry, Control Unit Matrix & Disassembler -->
+  <aside id="right-panel" class="fixed top-16 right-3 z-20 w-80 max-h-[calc(100vh-9.5rem)] overflow-y-auto space-y-2.5 pointer-events-auto">
+    
+    <!-- CPU Internal Registers & Flags -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-300">
+          CPU Die & Register File
+        </span>
+        <div class="flex items-center gap-1 font-mono-code text-[10px]">
+          <span id="flag-Z" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Z:0</span>
+          <span id="flag-C" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">C:0</span>
+          <span id="flag-N" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">N:0</span>
+        </div>
+      </div>
+
+      <!-- Special Pipeline Registers -->
+      <div class="grid grid-cols-2 gap-1.5 mb-2 font-mono-code text-[11px]">
+        <div class="bg-slate-950/70 p-1.5 rounded border border-slate-800 flex justify-between">
+          <span class="text-slate-400">PC:</span>
+          <span id="reg-PC" class="text-amber-300 font-semibold">0x0000</span>
+        </div>
+        <div class="bg-slate-950/70 p-1.5 rounded border border-slate-800 flex justify-between">
+          <span class="text-slate-400">MAR:</span>
+          <span id="reg-MAR" class="text-amber-300 font-semibold">0x0000</span>
+        </div>
+        <div class="bg-slate-950/70 p-1.5 rounded border border-slate-800 flex justify-between">
+          <span class="text-slate-400">MDR:</span>
+          <span id="reg-MDR" class="text-cyan-300 font-semibold">0x00</span>
+        </div>
+        <div class="bg-slate-950/70 p-1.5 rounded border border-slate-800 flex justify-between">
+          <span class="text-slate-400">IR:</span>
+          <span id="reg-IR" class="text-pink-300 font-semibold">0x00</span>
+        </div>
+      </div>
+
+      <!-- General Purpose Registers R0-R3 with 8-Bit Visual Flip-Flops -->
+      <div id="gpr-container" class="space-y-1.5 font-mono-code text-[11px]">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Tri-Bus Live State -->
+      <div class="mt-2.5 pt-2 border-t border-slate-800 space-y-1 font-mono-code text-[11px]">
+        <div class="flex justify-between">
+          <span class="text-amber-400/90">ADDR BUS (16b):</span>
+          <span id="bus-addr-val" class="text-amber-300">0x0000 [0000000000000000]</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-cyan-400/90">DATA BUS (8b):</span>
+          <span id="bus-data-val" class="text-cyan-300">0x00 [00000000]</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-pink-400/90">CTRL BUS (6b):</span>
+          <div id="bus-ctrl-pills" class="flex gap-1 text-[9px]">
+            <span id="ctrl-CLK" class="px-1 rounded bg-slate-800 text-slate-500">CLK</span>
+            <span id="ctrl-IRQ" class="px-1 rounded bg-slate-800 text-slate-500">IRQ</span>
+            <span id="ctrl-IACK" class="px-1 rounded bg-slate-800 text-slate-500">IACK</span>
+            <span id="ctrl-MRD" class="px-1 rounded bg-slate-800 text-slate-500">RD</span>
+            <span id="ctrl-MWR" class="px-1 rounded bg-slate-800 text-slate-500">WR</span>
+            <span id="ctrl-VSYNC" class="px-1 rounded bg-slate-800 text-slate-500">VSYNC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALU Nano-Gate Live Inspector (8-Bit Ripple-Carry Adder Slices) -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-300">
+          ALU Gate Network (8-Slice RCA)
+        </span>
+        <span id="alu-op-badge" class="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+          OP: PASS
+        </span>
+      </div>
+      <div class="text-[10px] font-mono-code text-slate-400 mb-1.5 flex justify-between">
+        <span id="alu-inputs-summary">INA: 0x00 | INB: 0x00</span>
+        <span id="alu-out-summary" class="text-emerald-300 font-bold">OUT: 0x00</span>
+      </div>
+      <!-- 8 Bit-Slice Gate Readout Row -->
+      <div id="alu-slices-grid" class="grid grid-cols-8 gap-1 text-center font-mono-code text-[10px]">
+        <!-- Bit 7..0 slice boxes -->
+      </div>
+    </div>
+
+    <!-- Live Instruction Disassembler & ROM/ISR Table -->
+    <div class="glass-panel rounded-xl p-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-300">
+          ROM / ISR Disassembler
+        </span>
+        <span id="cycle-counter" class="text-[10px] font-mono-code text-slate-400">
+          Cycles: 0
+        </span>
+      </div>
+      <div id="disasm-list" class="max-h-44 overflow-y-auto space-y-0.5 font-mono-code text-[11px] pr-1">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM EXECUTION TIME-CONTROL DECK -->
+  <footer class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 w-[96vw] max-w-4xl glass-panel rounded-2xl px-4 py-2.5 border border-cyan-500/25">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Step & Execution Buttons -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button id="btn-run-toggle" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition">
+          <span id="run-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="run-label">Auto-Run: ON</span>
+        </button>
+
+        <button id="btn-step-micro" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition" title="Advance 1 pipeline phase (T0 -> T1 -> T2 -> T3 -> T4)">
+          Step Sub-Cycle (Micro-Tick)
+        </button>
+
+        <button id="btn-step-instr" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 border border-blue-400/40 transition" title="Complete all 5 stages of current instruction">
+          Step Full Instruction
+        </button>
+
+        <button id="btn-step-screen" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 transition" title="Press 'A' (if no key pending) and run until character renders on 3D Monitor">
+          Step Until Screen Output
+        </button>
+      </div>
+
+      <!-- Clock Speed Slider (0.5 Hz to 100 Hz) & Audio / Reset -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label for="clock-slider" class="text-[11px] font-mono-code text-slate-400 whitespace-nowrap">
+            CLK: <span id="clock-hz-label" class="text-cyan-300 font-bold">2.0 Hz</span>
+          </label>
+          <input id="clock-slider" type="range" min="0" max="100" value="22" class="w-24 sm:w-32 h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        </div>
+
+        <button id="btn-audio-toggle" class="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Toggle Hardware Pulse Synthesizer">
+          <svg id="icon-audio-on" class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+        </button>
+
+        <button id="btn-reset" class="px-2.5 py-1.5 rounded-lg text-xs font-mono-code bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition">
+          Reset
+        </button>
+      </div>
+
+    </div>
+  </footer>
+
+  <script>
+    if (!window.THREE) {
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.innerHTML = '<main style="min-height:100vh;display:grid;place-items:center;background:#060911;color:#e2e8f0;font:14px Inter,Arial,sans-serif;padding:28px"><section style="max-width:640px;border:1px solid #28485a;background:#0b1725;border-radius:16px;padding:26px"><div style="color:#00f5d4;font:11px monospace;letter-spacing:.15em">GATE-LEVEL MICROSCOPE</div><h1>3D engine unavailable</h1><p style="line-height:1.7;color:#a9bdcc">This optional gate-level teaching simulator needs WebGL and the Three.js library from its CDN. Check your internet connection and WebGL support, then reload. The main laptop explorer and RISC-V CPU Lab are separate pages and remain available.</p><p><a style="color:#67dce5" href="index.html">Computer explorer</a> · <a style="color:#67dce5" href="cpu-lab.html">RISC-V CPU Lab</a> · <a style="color:#67dce5" href="learn.html">Learning path</a></p></section></main>';
+      });
+    } else {
+    /***************************************************************************
+     * 1. HARDWARE AUDIO SYNTHESIZER (Web Audio API)
+     ***************************************************************************/
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      beep(freq = 440, duration = 0.035, type = 'sine', gainVal = 0.04) {
+        if (!this.enabled) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+          // Ignore audio errors prior to gesture
+        }
+      }
+    }
+    const sound = new SoundEngine();
+
+    /***************************************************************************
+     * 2. 5x7 CHARACTER GENERATOR FONT ROM (ASCII 32..95)
+     * Each glyph is 7 rows of 5-bit integers (bit 4 = leftmost pixel, bit 0 = rightmost)
+     ***************************************************************************/
+    const FONT_5X7 = {
+      ' ': [0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000],
+      '0': [0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110],
+      '1': [0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110],
+      '2': [0b01110,0b10001,0b00001,0b00110,0b01000,0b10000,0b11111],
+      '3': [0b11110,0b00001,0b00001,0b01110,0b00001,0b00001,0b11110],
+      '4': [0b00010,0b00110,0b01010,0b10010,0b11111,0b00010,0b00010],
+      '5': [0b11111,0b10000,0b11110,0b00001,0b00001,0b10001,0b01110],
+      '6': [0b00110,0b01000,0b10000,0b11110,0b10001,0b10001,0b01110],
+      '7': [0b11111,0b00001,0b00010,0b00100,0b01000,0b01000,0b01000],
+      '8': [0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110],
+      '9': [0b01110,0b10001,0b10001,0b01111,0b00001,0b00010,0b01100],
+      'A': [0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
+      'B': [0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110],
+      'C': [0b01110,0b10001,0b10000,0b10000,0b10000,0b10001,0b01110],
+      'D': [0b11100,0b10010,0b10001,0b10001,0b10001,0b10010,0b11100],
+      'E': [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b11111],
+      'F': [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000],
+      'G': [0b01110,0b10001,0b10000,0b10111,0b10001,0b10001,0b01110],
+      'H': [0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
+      'I': [0b01110,0b00100,0b00100,0b00100,0b00100,0b00100,0b01110],
+      'J': [0b00111,0b00010,0b00010,0b00010,0b10010,0b10010,0b01100],
+      'K': [0b10001,0b10010,0b10100,0b11000,0b10100,0b10010,0b10001],
+      'L': [0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b11111],
+      'M': [0b10001,0b11011,0b10101,0b10101,0b10001,0b10001,0b10001],
+      'N': [0b10001,0b11001,0b10101,0b10011,0b10001,0b10001,0b10001],
+      'O': [0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
+      'P': [0b11110,0b10001,0b10001,0b11110,0b10000,0b10000,0b10000],
+      'Q': [0b01110,0b10001,0b10001,0b10001,0b10101,0b10010,0b01101],
+      'R': [0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001],
+      'S': [0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110],
+      'T': [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100],
+      'U': [0b10001,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
+      'V': [0b10001,0b10001,0b10001,0b10001,0b10001,0b01010,0b00100],
+      'W': [0b10001,0b10001,0b10001,0b10101,0b10101,0b10101,0b01010],
+      'X': [0b10001,0b10001,0b01010,0b00100,0b01010,0b10001,0b10001],
+      'Y': [0b10001,0b10001,0b01010,0b00100,0b00100,0b00100,0b00100],
+      'Z': [0b11111,0b00001,0b00010,0b00100,0b01000,0b10000,0b11111],
+      '?': [0b01110,0b10001,0b00010,0b00100,0b00100,0b00000,0b00100]
+    };
+
+    function getGlyphBitmap(asciiByte) {
+      if (asciiByte === 0) return FONT_5X7[' '];
+      const ch = String.fromCharCode(asciiByte).toUpperCase();
+      return FONT_5X7[ch] || FONT_5X7['?'];
+    }
+
+    /***************************************************************************
+     * 3. EMULATOR CORE (Cycle-Accurate 16-Opcode CPU, Gate-Level ALU, Matrix KBD)
+     ***************************************************************************/
+    const KEYPAD_LAYOUT = [
+      ['1', '2', '3', 'A'],
+      ['4', '5', '6', 'B'],
+      ['7', '8', '9', 'C'],
+      ['0', 'F', 'E', 'D']
+    ];
+
+    const OPCODES = {
+      NOP:  0x0, // Submodes in IR[1:0]: 0=NOP, 1=HLT, 2=IRET
+      LDI:  0x1, // LDI Rx, imm
+      LD:   0x2, // LD Rx, [addr]
+      ST:   0x3, // ST [addr], Rx
+      MOV:  0x4, // MOV Rx, Ry
+      ADD:  0x5, // ADD Rx, Ry
+      SUB:  0x6, // SUB Rx, Ry
+      AND:  0x7, // AND Rx, Ry
+      OR:   0x8, // OR Rx, Ry
+      XOR:  0x9, // XOR Rx, Ry
+      NOT:  0xA, // NOT Rx
+      SHL:  0xB, // SHL Rx
+      SHR:  0xC, // SHR Rx
+      JMP:  0xD, // JMP addr
+      JZ:   0xE, // JZ addr
+      JNZ:  0xF  // JNZ addr
+    };
+
+    const TRUTH_TABLES = {
+      XOR: [
+        ['A', 'B', 'OUT'],
+        ['0', '0', '0'],
+        ['0', '1', '1'],
+        ['1', '0', '1'],
+        ['1', '1', '0']
+      ],
+      AND: [
+        ['A', 'B', 'OUT'],
+        ['0', '0', '0'],
+        ['0', '1', '0'],
+        ['1', '0', '0'],
+        ['1', '1', '1']
+      ],
+      OR: [
+        ['A', 'B', 'OUT'],
+        ['0', '0', '0'],
+        ['0', '1', '1'],
+        ['1', '0', '1'],
+        ['1', '1', '1']
+      ],
+      NOT: [
+        ['IN', 'OUT'],
+        ['0', '1'],
+        ['1', '0']
+      ]
+    };
+
+    class GateLevelALU {
+      constructor() {
+        this.inA = 0;
+        this.inB = 0;
+        this.op = 'PASS';
+        this.result = 0;
+        this.flags = { Z: 0, C: 0, N: 0 };
+        this.slices = [];
+        for (let i = 0; i < 8; i++) {
+          this.slices.push({
+            bit: i,
+            a: 0,
+            b: 0,
+            cin: 0,
+            cout: 0,
+            sum: 0,
+            outBit: 0,
+            gates: {
+              XOR1: { type: 'XOR', name: `Slice[${i}] Half-Adder XOR1`, inA: 0, inB: 0, out: 0 },
+              XOR2: { type: 'XOR', name: `Slice[${i}] Full-Adder Sum XOR2`, inA: 0, inB: 0, out: 0 },
+              AND1: { type: 'AND', name: `Slice[${i}] Carry-Gen AND1`, inA: 0, inB: 0, out: 0 },
+              AND2: { type: 'AND', name: `Slice[${i}] Carry-Prop AND2`, inA: 0, inB: 0, out: 0 },
+              OR1:  { type: 'OR',  name: `Slice[${i}] Carry-Out OR1`, inA: 0, inB: 0, out: 0 }
+            }
+          });
+        }
+      }
+
+      evaluate(valA, valB, opType = 'ADD') {
+        this.inA = valA & 0xFF;
+        this.inB = valB & 0xFF;
+        this.op = opType;
+
+        // For SUB, invert B and set initial carry-in = 1 (2's complement adder)
+        let carry = (opType === 'SUB') ? 1 : 0;
+        const effectiveB = (opType === 'SUB') ? ((~this.inB) & 0xFF) : this.inB;
+
+        let finalResult = 0;
+
+        for (let i = 0; i < 8; i++) {
+          const a = (this.inA >> i) & 1;
+          const b = (effectiveB >> i) & 1;
+          const cin = carry;
+
+          // Gate-by-gate combinational evaluation
+          const xor1Out = a ^ b;
+          const xor2Out = xor1Out ^ cin;
+          const and1Out = a & b;
+          const and2Out = xor1Out & cin;
+          const or1Out  = and1Out | and2Out;
+
+          const slice = this.slices[i];
+          slice.a = a;
+          slice.b = (this.inB >> i) & 1;
+          slice.cin = cin;
+          slice.cout = or1Out;
+          slice.sum = xor2Out;
+
+          slice.gates.XOR1.inA = a;       slice.gates.XOR1.inB = b;       slice.gates.XOR1.out = xor1Out;
+          slice.gates.XOR2.inA = xor1Out; slice.gates.XOR2.inB = cin;     slice.gates.XOR2.out = xor2Out;
+          slice.gates.AND1.inA = a;       slice.gates.AND1.inB = b;       slice.gates.AND1.out = and1Out;
+          slice.gates.AND2.inA = xor1Out; slice.gates.AND2.inB = cin;     slice.gates.AND2.out = and2Out;
+          slice.gates.OR1.inA  = and1Out; slice.gates.OR1.inB  = and2Out; slice.gates.OR1.out  = or1Out;
+
+          carry = or1Out;
+
+          let bitOut = 0;
+          switch (opType) {
+            case 'ADD':
+            case 'SUB':
+              bitOut = xor2Out;
+              break;
+            case 'AND':
+              bitOut = a & ((this.inB >> i) & 1);
+              break;
+            case 'OR':
+              bitOut = a | ((this.inB >> i) & 1);
+              break;
+            case 'XOR':
+              bitOut = a ^ ((this.inB >> i) & 1);
+              break;
+            case 'NOT':
+              bitOut = (~a) & 1;
+              break;
+            case 'SHL':
+              bitOut = (i === 0) ? 0 : ((this.inA >> (i - 1)) & 1);
+              break;
+            case 'SHR':
+              bitOut = (i === 7) ? 0 : ((this.inA >> (i + 1)) & 1);
+              break;
+            default:
+              bitOut = a;
+              break;
+          }
+
+          slice.outBit = bitOut;
+          if (bitOut) finalResult |= (1 << i);
+        }
+
+        if (opType === 'SHL') carry = (this.inA >> 7) & 1;
+        if (opType === 'SHR') carry = this.inA & 1;
+
+        this.result = finalResult & 0xFF;
+        this.flags.Z = (this.result === 0) ? 1 : 0;
+        this.flags.C = (opType === 'ADD' || opType === 'SUB' || opType === 'SHL' || opType === 'SHR') ? carry : 0;
+        this.flags.N = (this.result >> 7) & 1;
+
+        return this.result;
+      }
+    }
+
+    class HardwareSimulator {
+      constructor() {
+        this.alu = new GateLevelALU();
+        this.isrAluMode = 'passthrough'; // 'passthrough' | 'cipher' | 'invert'
+        this.reset();
+      }
+
+      reset() {
+        // CPU Registers
+        this.PC = 0x0000;
+        this.MAR = 0x0000;
+        this.MDR = 0x00;
+        this.IR = 0x00;
+        this.R = [0x00, 0x00, 0x00, 0x01]; // R0=Data, R1=ALU Param, R2=VRAM Cursor, R3=Step(1)
+        this.FLAGS = { Z: 0, C: 0, N: 0 };
+
+        // Interrupt Shadow / Context Save
+        this.shadowPC = 0x0000;
+        this.shadowFlags = { Z: 0, C: 0, N: 0 };
+        this.inISR = false;
+        this.halted = false;
+
+        // 5-Stage Pipeline State ('T0', 'T1', 'T2', 'T3', 'T4')
+        this.stageIndex = 0;
+        this.stages = ['T0', 'T1', 'T2', 'T3', 'T4'];
+        this.cycleCount = 0;
+
+        // Tri-Bus States
+        this.addressBus = 0x0000;
+        this.dataBus = 0x00;
+        this.controlBus = {
+          CLK: 0,
+          IRQ: 0,
+          INT_ACK: 0,
+          MEM_RD: 0,
+          MEM_WR: 0,
+          VRAM_SYNC: 0
+        };
+
+        // Control Unit PLA Matrix Active Row/Cols
+        this.cuActiveOpcode = 0x0;
+        this.cuActiveSignals = [];
+
+        // 4x4 Matrix Keyboard & Debounce State
+        this.scanRow = 0;
+        this.pressedKey = null; // { char, ascii, row, col }
+        this.debounceCounter = 0; // 0..4 saturating counter
+        this.kbdDataPort = 0x00;  // Mapped at 0xFF00
+
+        // 64-Byte SRAM + VRAM (0x00..0x3F)
+        // 0x00..0x2F: Program ROM/RAM
+        // 0x30..0x37: Stack & Scratchpad
+        // 0x38..0x3F: Memory-Mapped Video RAM (8 characters)
+        this.sram = new Uint8Array(64);
+        this.activeMemCell = -1;
+        this.activeMemMode = null; // 'RD' | 'WR'
+
+        // Structured Instruction ROM table mapped to SRAM addresses
+        this.programMeta = {};
+        this.loadDefaultROM();
+        this.applyIsrAluMode();
+
+        // Pre-populate VRAM with "HI" or blank? Wait: let's pre-populate VRAM with clean blank spaces so typing lights up from slot 0, OR let's keep cursor R2=0 and clean VRAM!
+        this.alu.evaluate(0, 0, 'PASS');
+
+        // Active Signal Packet for 3D Particle Splines & Signal Chase Camera
+        this.activePackets = [];
+        this.focusTarget = 'CPU'; // 'KBD' | 'BUS' | 'CPU' | 'ALU' | 'MEM' | 'MON'
+        this.storyText = 'SYSTEM READY: Background loop running at 0x0000. Press any key on the 4x4 keypad (or your keyboard) to trigger IRQ1.';
+      }
+
+      encodeIR(opcode, rx = 0, ry = 0) {
+        return ((opcode & 0xF) << 4) | ((rx & 0x3) << 2) | (ry & 0x3);
+      }
+
+      loadDefaultROM() {
+        // Background Idle Loop (0x0000 - 0x0002)
+        this.setInstruction(0x0000, OPCODES.LDI, 3, 0, 0x0001, 'LDI R3, 0x01', 'Init increment constant R3 = 1');
+        this.setInstruction(0x0001, OPCODES.NOP, 0, 0, 0x0000, 'NOP', 'Idle background loop (awaiting IRQ1)');
+        this.setInstruction(0x0002, OPCODES.JMP, 0, 0, 0x0001, 'JMP 0x0001', 'Loop back to idle address 0x0001');
+
+        // Keyboard Interrupt Service Routine (ISR Vector at 0x0010 - 0x0016)
+        this.setInstruction(0x0010, OPCODES.LD,  0, 0, 0xFF00, 'LD R0, [0xFF00]', 'ISR: Read ASCII byte from Keyboard Port 0xFF00');
+        this.setInstruction(0x0011, OPCODES.ADD, 0, 1, 0x0000, 'ADD R0, R1', 'ISR: Process character through 8-bit ALU gates');
+        this.setInstruction(0x0012, OPCODES.ST,  0, 2, 0x0038, 'ST [0x0038+R2], R0', 'ISR: Write character into VRAM [0x38 + R2]');
+        this.setInstruction(0x0013, OPCODES.ADD, 2, 3, 0x0000, 'ADD R2, R3', 'ISR: Increment VRAM screen cursor R2');
+        this.setInstruction(0x0014, OPCODES.LDI, 1, 0, 0x0007, 'LDI R1, 0x07', 'ISR: Load modulo-8 cursor mask 0x07');
+        this.setInstruction(0x0015, OPCODES.AND, 2, 1, 0x0000, 'AND R2, R1', 'ISR: Wrap VRAM cursor R2 to 0..7');
+        this.setInstruction(0x0016, OPCODES.NOP, 0, 2, 0x0000, 'IRET', 'ISR: Restore PC & FLAGS, return from interrupt');
+      }
+
+      setInstruction(addr, opcode, rx, ry, operand, mnemonic, comment) {
+        const irByte = this.encodeIR(opcode, rx, ry);
+        this.sram[addr & 0x3F] = irByte;
+        this.programMeta[addr] = {
+          addr,
+          opcode,
+          rx,
+          ry,
+          operand,
+          irByte,
+          mnemonic,
+          comment
+        };
+      }
+
+      applyIsrAluMode() {
+        if (this.isrAluMode === 'passthrough') {
+          this.R[1] = 0x00;
+          this.setInstruction(0x0011, OPCODES.ADD, 0, 1, 0x0000, 'ADD R0, R1', 'ISR: ALU Ripple-Carry Add +0x00 (Exact Echo)');
+        } else if (this.isrAluMode === 'cipher') {
+          this.R[1] = 0x01;
+          this.setInstruction(0x0011, OPCODES.ADD, 0, 1, 0x0000, 'ADD R0, R1', 'ISR: ALU Ripple-Carry Add +0x01 (Next ASCII)');
+        } else if (this.isrAluMode === 'invert') {
+          this.R[1] = 0x20;
+          this.setInstruction(0x0011, OPCODES.XOR, 0, 1, 0x0000, 'XOR R0, R1', 'ISR: ALU Bitwise XOR 0x20 (Flip Bit 5)');
+        }
+      }
+
+      // Triggered when user clicks a 4x4 keycap or presses a physical keyboard key
+      pressKey(charStr) {
+        const cleanChar = (charStr || 'A').toUpperCase().charAt(0);
+        const ascii = cleanChar.charCodeAt(0) & 0xFF;
+
+        // Map to 4x4 matrix coordinates
+        let foundRow = 0, foundCol = 3;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (KEYPAD_LAYOUT[r][c] === cleanChar) {
+              foundRow = r;
+              foundCol = c;
+            }
+          }
+        }
+        // If typed key is outside 4x4 hex labels (e.g. 'H', 'Z'), map deterministically to matrix switch
+        if (!KEYPAD_LAYOUT.flat().includes(cleanChar)) {
+          foundRow = (ascii >> 2) & 0x3;
+          foundCol = ascii & 0x3;
+        }
+
+        this.pressedKey = { char: cleanChar, ascii, row: foundRow, col: foundCol };
+        this.scanRow = foundRow;
+
+        // Step through 4-bit saturating debounce filter and latch into KBD_DATA (0xFF00)
+        this.debounceCounter = 4;
+        this.kbdDataPort = ascii;
+        this.controlBus.IRQ = 1;
+
+        this.activePackets = [
+          { from: 'KBD', to: 'CU', bus: 'CTRL', color: 0xF43F5E, label: `IRQ1 ('${cleanChar}'=0x${ascii.toString(16).toUpperCase()})` }
+        ];
+        this.focusTarget = 'KBD';
+        this.storyText = `KEYPRESSED '${cleanChar}' (0x${ascii.toString(16).toUpperCase()}): Matrix switch [ROW${foundRow}, COL${foundCol}] closed → Debounce counter saturated (4/4) → Latched 0x${ascii.toString(16).toUpperCase()} in KBD_DATA [0xFF00] → Asserted IRQ1!`;
+        sound.beep(660, 0.05, 'triangle', 0.06);
+      }
+
+      getCurrentInstructionMeta() {
+        return this.programMeta[this.PC] || {
+          addr: this.PC,
+          opcode: (this.sram[this.PC & 0x3F] >> 4) & 0xF,
+          rx: (this.sram[this.PC & 0x3F] >> 2) & 0x3,
+          ry: this.sram[this.PC & 0x3F] & 0x3,
+          operand: 0x0000,
+          irByte: this.sram[this.PC & 0x3F],
+          mnemonic: 'NOP',
+          comment: 'Memory byte'
+        };
+      }
+
+      // Advances exactly ONE pipeline micro-stage (T0 -> T1 -> T2 -> T3 -> T4)
+      stepMicroCycle() {
+        if (this.halted) return { stage: 'HLT', vramUpdated: false };
+
+        const stage = this.stages[this.stageIndex];
+        this.cycleCount++;
+        this.scanRow = (this.scanRow + 1) & 0x3;
+
+        // Reset transient control lines
+        this.controlBus.CLK = 1;
+        this.controlBus.MEM_RD = 0;
+        this.controlBus.MEM_WR = 0;
+        this.controlBus.INT_ACK = 0;
+        this.controlBus.VRAM_SYNC = 0;
+        this.activeMemCell = -1;
+        this.activeMemMode = null;
+        this.activePackets = [];
+
+        let vramUpdated = false;
+        const meta = this.getCurrentInstructionMeta();
+
+        if (stage === 'T0') {
+          // 1. FETCH: PC -> MAR, assert MEM_RD, SRAM[MAR] -> MDR -> IR
+          this.MAR = this.PC;
+          this.addressBus = this.MAR;
+          this.controlBus.MEM_RD = 1;
+          this.activeMemCell = this.MAR & 0x3F;
+          this.activeMemMode = 'RD';
+          this.MDR = this.sram[this.activeMemCell];
+          this.dataBus = this.MDR;
+          this.IR = this.MDR;
+          this.cuActiveOpcode = (this.IR >> 4) & 0xF;
+          this.cuActiveSignals = ['PC_OUT', 'MAR_LD', 'MEM_RD', 'IR_LD'];
+
+          this.activePackets = [
+            { from: 'CPU_PC', to: 'MEM', bus: 'ADDR', color: 0xF59E0B, label: `ADDR 0x${this.MAR.toString(16).padStart(4,'0').toUpperCase()}` },
+            { from: 'MEM', to: 'CPU_IR', bus: 'DATA', color: 0x00F5D4, label: `OPCODE 0x${this.IR.toString(16).padStart(2,'0').toUpperCase()}` }
+          ];
+          this.focusTarget = 'CPU';
+          this.storyText = `[T0 FETCH] PC (0x${this.PC.toString(16).padStart(4,'0')}) → MAR → Address Bus. SRAM[0x${this.MAR.toString(16).padStart(2,'0')}] drives 0x${this.MDR.toString(16).padStart(2,'0')} (${meta.mnemonic}) onto Data Bus → MDR → IR.`;
+          sound.beep(320, 0.025, 'sine', 0.03);
+        }
+
+        else if (stage === 'T1') {
+          // 2. DECODE: IR[7:4] Opcode & IR[3:0] Reg/Mode feed into Control Unit PLA Matrix
+          const op = (this.IR >> 4) & 0xF;
+          this.cuActiveOpcode = op;
+          this.cuActiveSignals = ['DEC_PLA'];
+          if ([OPCODES.LDI, OPCODES.LD, OPCODES.MOV, OPCODES.ADD, OPCODES.SUB, OPCODES.AND, OPCODES.OR, OPCODES.XOR, OPCODES.NOT, OPCODES.SHL, OPCODES.SHR].includes(op)) {
+            this.cuActiveSignals.push('REG_WE');
+          }
+          if ([OPCODES.ADD, OPCODES.SUB, OPCODES.AND, OPCODES.OR, OPCODES.XOR, OPCODES.NOT, OPCODES.SHL, OPCODES.SHR].includes(op)) {
+            this.cuActiveSignals.push('ALU_EN');
+          }
+          if (op === OPCODES.LD) this.cuActiveSignals.push('MEM_RD');
+          if (op === OPCODES.ST) this.cuActiveSignals.push('MEM_WR');
+
+          this.activePackets = [
+            { from: 'CPU_IR', to: 'CU', bus: 'CTRL', color: 0xEC4899, label: `DECODE ${meta.mnemonic}` }
+          ];
+          this.focusTarget = 'CPU';
+          this.storyText = `[T1 DECODE] IR[7:4]=0x${op.toString(16).toUpperCase()} & IR[3:0]=0x${(this.IR & 0xF).toString(16).toUpperCase()} energize Control Unit PLA Matrix for "${meta.mnemonic}".`;
+          sound.beep(390, 0.025, 'sine', 0.03);
+        }
+
+        else if (stage === 'T2') {
+          // 3. EXECUTE: Registers drive ALU Input Buses A & B; 8-bit Ripple-Carry Adder & Logic gates propagate
+          const op = meta.opcode;
+          const rx = meta.rx;
+          const ry = meta.ry;
+
+          if (op === OPCODES.ADD) {
+            // If we are at 0x0011 in the ISR, ensure R1 has the right transform constant before evaluating
+            if (this.PC === 0x0011) {
+              this.R[1] = (this.isrAluMode === 'passthrough') ? 0x00 : 0x01;
+            }
+            this.alu.evaluate(this.R[rx], this.R[ry], 'ADD');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.activePackets = [
+              { from: 'REG', to: 'ALU', bus: 'DATA', color: 0x00F5D4, label: `R${rx}(0x${this.R[rx].toString(16)}) + R${ry}(0x${this.R[ry].toString(16)})` }
+            ];
+            this.storyText = `[T2 EXECUTE] R${rx} (0x${this.R[rx].toString(16).padStart(2,'0')}) and R${ry} (0x${this.R[ry].toString(16).padStart(2,'0')}) drive ALU Buses A & B → 8 Full-Adder slices ripple carry → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.SUB) {
+            this.alu.evaluate(this.R[rx], this.R[ry], 'SUB');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU subtracts R${rx} - R${ry} via 2's complement adder → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.AND) {
+            this.alu.evaluate(this.R[rx], this.R[ry], 'AND');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU Bitwise AND gates evaluate R${rx} & R${ry} → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.OR) {
+            this.alu.evaluate(this.R[rx], this.R[ry], 'OR');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU Bitwise OR gates evaluate R${rx} | R${ry} → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.XOR) {
+            if (this.PC === 0x0011) this.R[1] = 0x20;
+            this.alu.evaluate(this.R[rx], this.R[ry], 'XOR');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU Bitwise XOR gates evaluate R${rx} ^ R${ry} → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.NOT) {
+            this.alu.evaluate(this.R[rx], 0, 'NOT');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU Inverter gates flip bits of R${rx} → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else if (op === OPCODES.SHL || op === OPCODES.SHR) {
+            this.alu.evaluate(this.R[rx], 0, op === OPCODES.SHL ? 'SHL' : 'SHR');
+            this.FLAGS = { ...this.alu.flags };
+            this.focusTarget = 'ALU';
+            this.storyText = `[T2 EXECUTE] ALU Barrel Shifter shifts R${rx} → Result 0x${this.alu.result.toString(16).padStart(2,'0')}.`;
+          } else {
+            // Address generation or immediate pass
+            this.alu.evaluate(this.R[rx], meta.operand & 0xFF, 'PASS');
+            this.focusTarget = 'CPU';
+            this.storyText = `[T2 EXECUTE] Effective operand/address 0x${meta.operand.toString(16).padStart(4,'0').toUpperCase()} prepared for ${meta.mnemonic}.`;
+          }
+          sound.beep(460, 0.025, 'sine', 0.03);
+        }
+
+        else if (stage === 'T3') {
+          // 4. MEMORY ACCESS: LD / ST drive Address Bus & Data Bus
+          const op = meta.opcode;
+          const rx = meta.rx;
+          const ry = meta.ry;
+
+          if (op === OPCODES.LD) {
+            const effAddr = meta.operand;
+            this.MAR = effAddr;
+            this.addressBus = effAddr;
+            this.controlBus.MEM_RD = 1;
+
+            if (effAddr === 0xFF00) {
+              // Memory-Mapped Keyboard I/O Read
+              this.MDR = this.kbdDataPort;
+              this.dataBus = this.MDR;
+              this.activePackets = [
+                { from: 'CPU_MAR', to: 'KBD', bus: 'ADDR', color: 0xF59E0B, label: 'IO_ADDR 0xFF00' },
+                { from: 'KBD', to: 'CPU_MDR', bus: 'DATA', color: 0x00F5D4, label: `ASCII 0x${this.MDR.toString(16).toUpperCase()} ('${String.fromCharCode(this.MDR || 32)}')` }
+              ];
+              this.focusTarget = 'KBD';
+              this.storyText = `[T3 MEMORY/IO] MAR drives 0xFF00 onto Address Bus → Keyboard Buffer [0xFF00] places ASCII 0x${this.MDR.toString(16).padStart(2,'0')} ('${String.fromCharCode(this.MDR || 32)}') onto Data Bus → MDR.`;
+            } else {
+              this.activeMemCell = effAddr & 0x3F;
+              this.activeMemMode = 'RD';
+              this.MDR = this.sram[this.activeMemCell];
+              this.dataBus = this.MDR;
+              this.activePackets = [
+                { from: 'CPU_MAR', to: 'MEM', bus: 'ADDR', color: 0xF59E0B, label: `ADDR 0x${effAddr.toString(16)}` },
+                { from: 'MEM', to: 'CPU_MDR', bus: 'DATA', color: 0x00F5D4, label: `DATA 0x${this.MDR.toString(16)}` }
+              ];
+              this.focusTarget = 'MEM';
+              this.storyText = `[T3 MEMORY] Read SRAM[0x${this.activeMemCell.toString(16).padStart(2,'0')}] → 0x${this.MDR.toString(16).padStart(2,'0')} onto Data Bus → MDR.`;
+            }
+          } else if (op === OPCODES.ST) {
+            // Indexed VRAM store: [operand + R[ry]]
+            const offset = (ry > 0) ? (this.R[ry] & 0x07) : 0;
+            const effAddr = (meta.operand + offset) & 0x3F;
+            this.MAR = effAddr;
+            this.MDR = this.R[rx] & 0xFF;
+            this.addressBus = this.MAR;
+            this.dataBus = this.MDR;
+            this.controlBus.MEM_WR = 1;
+            this.activeMemCell = effAddr;
+            this.activeMemMode = 'WR';
+            this.sram[effAddr] = this.MDR;
+
+            if (effAddr >= 0x38 && effAddr <= 0x3F) {
+              this.controlBus.VRAM_SYNC = 1;
+              vramUpdated = true;
+              this.activePackets = [
+                { from: 'CPU_MAR', to: 'MEM', bus: 'ADDR', color: 0xF59E0B, label: `VRAM 0x${effAddr.toString(16).toUpperCase()}` },
+                { from: 'CPU_MDR', to: 'MEM', bus: 'DATA', color: 0x00F5D4, label: `CHAR '${String.fromCharCode(this.MDR)}'` },
+                { from: 'MEM', to: 'MON', bus: 'CTRL', color: 0x10B981, label: `5x7 GLYPH '${String.fromCharCode(this.MDR)}'` }
+              ];
+              this.focusTarget = 'MON';
+              this.storyText = `[T3 VRAM WRITE & SCANOUT] Stored 0x${this.MDR.toString(16).toUpperCase()} ('${String.fromCharCode(this.MDR)}') to VRAM[0x${effAddr.toString(16).toUpperCase()}] → Display Controller looks up 5x7 Font ROM and illuminates 3D Monitor pixels!`;
+              sound.beep(880, 0.07, 'triangle', 0.07);
+            } else {
+              this.focusTarget = 'MEM';
+              this.storyText = `[T3 MEMORY WRITE] Wrote R${rx} (0x${this.MDR.toString(16).padStart(2,'0')}) into SRAM[0x${effAddr.toString(16).padStart(2,'0')}].`;
+            }
+          } else {
+            this.storyText = `[T3 MEMORY] No external SRAM transfer required for ${meta.mnemonic}; internal buses steady.`;
+          }
+          if (!vramUpdated) sound.beep(520, 0.025, 'sine', 0.025);
+        }
+
+        else if (stage === 'T4') {
+          // 5. WRITE-BACK & NEXT PC / INTERRUPT ACKNOWLEDGE
+          const op = meta.opcode;
+          const rx = meta.rx;
+          const ry = meta.ry;
+          let nextPC = (this.PC + 1) & 0xFFFF;
+
+          switch (op) {
+            case OPCODES.LDI:
+              this.R[rx] = meta.operand & 0xFF;
+              this.storyText = `[T4 WRITE-BACK] Immediate value 0x${this.R[rx].toString(16).padStart(2,'0')} latched into Register R${rx}.`;
+              break;
+            case OPCODES.LD:
+              this.R[rx] = this.MDR & 0xFF;
+              this.storyText = `[T4 WRITE-BACK] MDR (0x${this.MDR.toString(16).padStart(2,'0')}) latched into Register R${rx}.`;
+              break;
+            case OPCODES.MOV:
+              this.R[rx] = this.R[ry] & 0xFF;
+              this.storyText = `[T4 WRITE-BACK] Copied R${ry} to R${rx}.`;
+              break;
+            case OPCODES.ADD:
+            case OPCODES.SUB:
+            case OPCODES.AND:
+            case OPCODES.OR:
+            case OPCODES.XOR:
+            case OPCODES.NOT:
+            case OPCODES.SHL:
+            case OPCODES.SHR:
+              this.R[rx] = this.alu.result & 0xFF;
+              this.storyText = `[T4 WRITE-BACK] ALU Result 0x${this.alu.result.toString(16).padStart(2,'0')} latched into Register R${rx}.`;
+              break;
+            case OPCODES.JMP:
+              nextPC = meta.operand & 0xFFFF;
+              this.storyText = `[T4 WRITE-BACK] Unconditional Jump: PC loaded with 0x${nextPC.toString(16).padStart(4,'0')}.`;
+              break;
+            case OPCODES.JZ:
+              if (this.FLAGS.Z === 1) nextPC = meta.operand & 0xFFFF;
+              this.storyText = `[T4 WRITE-BACK] JZ evaluated (Z=${this.FLAGS.Z}) → Next PC = 0x${nextPC.toString(16).padStart(4,'0')}.`;
+              break;
+            case OPCODES.JNZ:
+              if (this.FLAGS.Z === 0) nextPC = meta.operand & 0xFFFF;
+              this.storyText = `[T4 WRITE-BACK] JNZ evaluated (Z=${this.FLAGS.Z}) → Next PC = 0x${nextPC.toString(16).padStart(4,'0')}.`;
+              break;
+            case OPCODES.NOP:
+              if (ry === 1) {
+                this.halted = true;
+                this.storyText = `[T4 HLT] Processor halted.`;
+              } else if (ry === 2) {
+                // IRET: Restore PC and FLAGS from Shadow/Stack
+                nextPC = this.shadowPC;
+                this.FLAGS = { ...this.shadowFlags };
+                this.inISR = false;
+                this.pressedKey = null;
+                this.debounceCounter = 0;
+                this.focusTarget = 'CPU';
+                this.storyText = `[T4 IRET] Returned from Interrupt! Restored PC=0x${nextPC.toString(16).padStart(4,'0')} and FLAGS from Stack[0x30].`;
+              } else {
+                this.storyText = `[T4 WRITE-BACK] NOP complete; PC advances to 0x${nextPC.toString(16).padStart(4,'0')}.`;
+              }
+              break;
+            default:
+              break;
+          }
+
+          this.PC = nextPC;
+
+          // Check if Hardware Interrupt (IRQ1) is asserted and CPU is not already in ISR
+          if (this.controlBus.IRQ === 1 && !this.inISR) {
+            this.inISR = true;
+            this.controlBus.INT_ACK = 1;
+            this.controlBus.IRQ = 0;
+            this.shadowPC = this.PC;
+            this.shadowFlags = { ...this.FLAGS };
+            // Save context to Stack SRAM[0x30..0x31]
+            this.sram[0x30] = this.shadowPC & 0xFF;
+            this.sram[0x31] = (this.FLAGS.Z << 2) | (this.FLAGS.C << 1) | this.FLAGS.N;
+            // Jump to ISR Vector 0x0010
+            this.PC = 0x0010;
+            this.activePackets = [
+              { from: 'CU', to: 'CPU_PC', bus: 'CTRL', color: 0xF43F5E, label: 'INT_ACK → VECTOR 0x0010' }
+            ];
+            this.focusTarget = 'CPU';
+            this.storyText = `[T4 → INT_ACK] IRQ1 Acknowledged! Saved return PC (0x${this.shadowPC.toString(16).padStart(4,'0')}) to Stack[0x30] and jumped PC to ISR Vector 0x0010!`;
+            sound.beep(740, 0.06, 'sawtooth', 0.05);
+          } else {
+            sound.beep(580, 0.025, 'sine', 0.025);
+          }
+        }
+
+        // Advance pipeline stage index (0..4)
+        this.stageIndex = (this.stageIndex + 1) % 5;
+
+        return {
+          executedStage: stage,
+          vramUpdated
+        };
+      }
+    }
+
+    const sim = new HardwareSimulator();
+
+    /***************************************************************************
+     * 4. THREE.JS 3D SCENE & ANATOMICAL HARDWARE RENDERER
+     ***************************************************************************/
+    const container = document.getElementById('canvas-container');
+    const labelsOverlay = document.getElementById('labels-overlay');
+    const hoverTooltip = document.getElementById('hover-tooltip');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060911);
+    scene.fog = new THREE.FogExp2(0x060911, 0.0042);
+
+    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 400);
+    camera.position.set(0, 56, 86);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    container.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x94A3B8, 0.75);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0x38BDF8, 0.9);
+    dirLight1.position.set(-40, 70, 50);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x10B981, 0.65);
+    dirLight2.position.set(50, 60, -30);
+    scene.add(dirLight2);
+
+    // Anatomical Layer Groups
+    const groups = {
+      skeletal: new THREE.Group(), // Motherboard PCB & silk-screen
+      shells: new THREE.Group(),   // IC Translucent Acrylic Packages
+      control: new THREE.Group(),  // Clock & Control Nervous System
+      buses: new THREE.Group(),    // Address & Data Vascular Ribbons
+      gates: new THREE.Group(),    // ALU Nano Logic Gates
+      core: new THREE.Group()      // Always-visible Keycaps, Bit-Cells, SRAM, Monitor
+    };
+    Object.values(groups).forEach(g => scene.add(g));
+
+    // Interactive Raycast Registry
+    const interactables = [];
+    function registerInteractable(mesh, meta) {
+      mesh.userData = meta;
+      interactables.push(mesh);
+    }
+
+    // Color Palette Constants
+    const COL_BIT_OFF = new THREE.Color(0x111827);
+    const COL_BIT_ON_CYAN = new THREE.Color(0x00F5D4);
+    const COL_BIT_ON_AMBER = new THREE.Color(0xF59E0B);
+    const COL_BIT_ON_PINK = new THREE.Color(0xEC4899);
+    const COL_BIT_ON_EMERALD = new THREE.Color(0x10B981);
+    const COL_VRAM_OFF = new THREE.Color(0x1E293B);
+    const COL_PIXEL_OFF = new THREE.Color(0x09131C);
+    const COL_PIXEL_ON = new THREE.Color(0x00F5D4);
+
+    // --- 4.1 SKELETAL LAYER: Motherboard Substrate & Grid ---
+    const pcbCanvas = document.createElement('canvas');
+    pcbCanvas.width = 2048; pcbCanvas.height = 1024;
+    const pCtx = pcbCanvas.getContext('2d');
+    const pGrad = pCtx.createLinearGradient(0,0,2048,1024);
+    pGrad.addColorStop(0,'#061c1b'); pGrad.addColorStop(0.5,'#082624'); pGrad.addColorStop(1,'#051417');
+    pCtx.fillStyle = pGrad; pCtx.fillRect(0,0,2048,1024);
+    pCtx.strokeStyle = 'rgba(0,245,212,0.08)'; pCtx.lineWidth = 2;
+    for(let i=0;i<40;i++){
+      pCtx.beginPath(); pCtx.moveTo(60, 80+i*22); pCtx.lineTo(1980, 80+i*22); pCtx.stroke();
+    }
+    pCtx.fillStyle = '#d4a853';
+    for(let v=0;v<280;v++){
+      pCtx.beginPath(); pCtx.arc((v*197)%1980+30, (v*311)%960+30, 3.5, 0, Math.PI*2); pCtx.fill();
+    }
+    const pcbTex = new THREE.CanvasTexture(pcbCanvas);
+    pcbTex.anisotropy = 8;
+    const pcbGeo = new THREE.BoxGeometry(148, 1.6, 68);
+    const pcbMat = new THREE.MeshStandardMaterial({
+      map: pcbTex,
+      bumpMap: pcbTex,
+      bumpScale: 0.02,
+      roughness: 0.55,
+      metalness: 0.35
+    });
+    const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
+    pcbMesh.position.set(0, -1.0, 0);
+    pcbMesh.receiveShadow = true;
+    groups.skeletal.add(pcbMesh);
+
+    const gridHelper = new THREE.GridHelper(148, 37, 0x1E293B, 0x0F172A);
+    gridHelper.position.set(0, -0.15, 0);
+    groups.skeletal.add(gridHelper);
+
+    // --- 4.2 LAYER 1: INPUT SUBSYSTEM (Left Wing: X: -58 to -32) ---
+    const keycapMeshes = [];
+    const rowWireMeshes = [];
+    const colWireMeshes = [];
+    const kbdBaseX = -46;
+    const kbdBaseZ = -4;
+
+    // Keyboard Base Frame
+    const kbdPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(22, 0.8, 22),
+      new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.5, metalness: 0.4 })
+    );
+    kbdPlate.position.set(kbdBaseX, 0.4, kbdBaseZ);
+    groups.skeletal.add(kbdPlate);
+
+    // 4 Row & 4 Column Matrix Scan Wires
+    for (let i = 0; i < 4; i++) {
+      const rWire = new THREE.Mesh(
+        new THREE.BoxGeometry(19, 0.18, 0.25),
+        new THREE.MeshBasicMaterial({ color: 0x334155 })
+      );
+      rWire.position.set(kbdBaseX, 0.9, kbdBaseZ - 6.75 + i * 4.5);
+      groups.core.add(rWire);
+      rowWireMeshes.push(rWire);
+
+      const cWire = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.18, 19),
+        new THREE.MeshBasicMaterial({ color: 0x334155 })
+      );
+      cWire.position.set(kbdBaseX - 6.75 + i * 4.5, 0.95, kbdBaseZ);
+      groups.core.add(cWire);
+      colWireMeshes.push(cWire);
+    }
+
+    // 16 Physical 3D Keycaps
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const keyChar = KEYPAD_LAYOUT[r][c];
+        const kGeo = new THREE.BoxGeometry(3.4, 1.4, 3.4);
+        const kMat = new THREE.MeshStandardMaterial({
+          color: 0x1E293B,
+          emissive: 0x000000,
+          roughness: 0.35,
+          metalness: 0.2
+        });
+        const kMesh = new THREE.Mesh(kGeo, kMat);
+        const kx = kbdBaseX - 6.75 + c * 4.5;
+        const kz = kbdBaseZ - 6.75 + r * 4.5;
+        kMesh.position.set(kx, 1.6, kz);
+        groups.core.add(kMesh);
+
+        registerInteractable(kMesh, {
+          kind: 'KEYCAP',
+          keyChar,
+          row: r,
+          col: c,
+          title: `Matrix Key '${keyChar}'`,
+          layer: 'Input Layer 1',
+          getDetails: () => [
+            `ASCII Code: 0x${keyChar.charCodeAt(0).toString(16).toUpperCase()} (${keyChar.charCodeAt(0)})`,
+            `Matrix Node: ROW${r} × COL${c}`,
+            `Click to press key & fire IRQ1!`
+          ]
+        });
+
+        keycapMeshes.push({ mesh: kMesh, char: keyChar, row: r, col: c, baseY: 1.6 });
+      }
+    }
+
+    // Debounce & KBD_DATA (0xFF00) Hardware Block
+    const debounceShell = new THREE.Mesh(
+      new THREE.BoxGeometry(20, 3.2, 7.5),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x0EA5E9,
+        transparent: true,
+        opacity: 0.22,
+        roughness: 0.2
+      })
+    );
+    debounceShell.position.set(kbdBaseX, 1.6, 12.5);
+    groups.shells.add(debounceShell);
+
+    const kbdPortBitMeshes = [];
+    for (let b = 0; b < 8; b++) {
+      const bm = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 1.2, 1.5),
+        new THREE.MeshStandardMaterial({ color: 0x111827, emissive: 0x000000 })
+      );
+      bm.position.set(kbdBaseX - 7 + b * 2.0, 1.2, 12.5);
+      groups.core.add(bm);
+      registerInteractable(bm, {
+        kind: 'KBD_BIT',
+        bit: 7 - b,
+        title: `KBD_DATA[0xFF00] Bit ${7 - b}`,
+        layer: 'Input Buffer',
+        getDetails: () => {
+          const v = (sim.kbdDataPort >> (7 - b)) & 1;
+          return [
+            `Port Address: 0xFF00`,
+            `Bit [${7 - b}] Value: ${v}`,
+            `Full Byte: 0x${sim.kbdDataPort.toString(16).padStart(2, '0').toUpperCase()}`
+          ];
+        }
+      });
+      kbdPortBitMeshes.push(bm);
+    }
+
+    // --- 4.3 LAYER 2: TRI-BUS HIGHWAY (Z: +14 to +24) ---
+    // Address Bus (16 parallel traces), Data Bus (8 parallel traces), Control Bus (6 traces)
+    const addrBusMeshes = [];
+    const dataBusMeshes = [];
+    const ctrlBusMeshes = [];
+
+    const busStartX = -46;
+    const busEndX = 48;
+    const busLength = busEndX - busStartX;
+    const busCenterX = (busStartX + busEndX) / 2;
+
+    // 16 Address Bus Traces (Gold/Amber)
+    for (let i = 0; i < 16; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(busLength, 0.14, 0.18),
+        new THREE.MeshBasicMaterial({ color: 0x27272A })
+      );
+      m.position.set(busCenterX, 0.25, 17.5 + i * 0.32);
+      groups.buses.add(m);
+      registerInteractable(m, {
+        kind: 'BUS_WIRE',
+        title: `Address Bus Line A[${15 - i}]`,
+        layer: 'Tri-Bus Highway',
+        getDetails: () => [
+          `Bit Line: A[${15 - i}] = ${(sim.addressBus >> (15 - i)) & 1}`,
+          `Full Address Bus: 0x${sim.addressBus.toString(16).padStart(4, '0').toUpperCase()}`
+        ]
+      });
+      addrBusMeshes.push(m);
+    }
+
+    // 8 Data Bus Traces (Cyan)
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(busLength, 0.16, 0.24),
+        new THREE.MeshBasicMaterial({ color: 0x1E293B })
+      );
+      m.position.set(busCenterX, 0.25, 23.2 + i * 0.42);
+      groups.buses.add(m);
+      registerInteractable(m, {
+        kind: 'BUS_WIRE',
+        title: `Data Bus Line D[${7 - i}]`,
+        layer: 'Tri-Bus Highway',
+        getDetails: () => [
+          `Bit Line: D[${7 - i}] = ${(sim.dataBus >> (7 - i)) & 1}`,
+          `Full Data Bus: 0x${sim.dataBus.toString(16).padStart(2, '0').toUpperCase()} (${sim.dataBus.toString(2).padStart(8, '0')})`
+        ]
+      });
+      dataBusMeshes.push(m);
+    }
+
+    // 6 Control Bus Traces (Magenta / Emerald)
+    const ctrlSignalNames = ['CLK', 'IRQ', 'INT_ACK', 'MEM_RD', 'MEM_WR', 'VRAM_SYNC'];
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(busLength, 0.16, 0.24),
+        new THREE.MeshBasicMaterial({ color: 0x1E1B4B })
+      );
+      m.position.set(busCenterX, 0.25, 27.2 + i * 0.48);
+      groups.control.add(m);
+      registerInteractable(m, {
+        kind: 'CTRL_WIRE',
+        title: `Control Bus Line: ${ctrlSignalNames[i]}`,
+        layer: 'Control Nervous System',
+        getDetails: () => [
+          `Signal: ${ctrlSignalNames[i]}`,
+          `Active State: ${sim.controlBus[ctrlSignalNames[i]] ? '1 (ASSERTED HIGH)' : '0 (LOW)'}`
+        ]
+      });
+      ctrlBusMeshes.push({ name: ctrlSignalNames[i], mesh: m });
+    }
+
+    // --- 4.4 LAYER 3: CPU DIE INTERNALS (Center Stage: X: -22 to +22) ---
+    const cpuShellMat = new THREE.MeshPhysicalMaterial({
+      color: 0x38BDF8,
+      transparent: true,
+      opacity: 0.22,
+      roughness: 0.15,
+      metalness: 0.1
+    });
+    const cpuShell = new THREE.Mesh(new THREE.BoxGeometry(44, 11, 34), cpuShellMat);
+    cpuShell.position.set(0, 5.5, -2);
+    groups.shells.add(cpuShell);
+
+    const cpuWireframe = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(44, 11, 34)),
+      new THREE.LineBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.45 })
+    );
+    cpuWireframe.position.copy(cpuShell.position);
+    groups.shells.add(cpuWireframe);
+
+    // CPU Special Registers: PC (16b), MAR (16b), MDR (8b), IR (8b)
+    function createBitRow(bitCount, startX, y, z, spacing, size, labelPrefix) {
+      const arr = [];
+      for (let i = 0; i < bitCount; i++) {
+        const m = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size, size),
+          new THREE.MeshStandardMaterial({ color: 0x111827, emissive: 0x000000, roughness: 0.3 })
+        );
+        m.position.set(startX + i * spacing, y, z);
+        groups.core.add(m);
+        registerInteractable(m, {
+          kind: 'REG_BIT',
+          title: `${labelPrefix} Bit [${bitCount - 1 - i}]`,
+          layer: 'CPU Register',
+          getDetails: () => [`Register: ${labelPrefix}`, `Bit Position: ${bitCount - 1 - i}`]
+        });
+        arr.push(m);
+      }
+      return arr;
+    }
+
+    const pcBitMeshes  = createBitRow(16, -19.5, 2.0, -14.5, 0.95, 0.72, 'PC');
+    const marBitMeshes = createBitRow(16, -19.5, 2.0, -11.0, 0.95, 0.72, 'MAR');
+    const mdrBitMeshes = createBitRow(8,  -19.5, 2.0, -7.5,  1.2,  0.9,  'MDR');
+    const irBitMeshes  = createBitRow(8,  -19.5, 2.0, -4.0,  1.2,  0.9,  'IR');
+
+    // Control Unit (CU) 3D PLA Matrix (8x5 Grid at X: -18 to -8, Z: +1 to +9)
+    const plaNodes = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 5; c++) {
+        const node = new THREE.Mesh(
+          new THREE.BoxGeometry(0.85, 0.6, 0.85),
+          new THREE.MeshStandardMaterial({ color: 0x1E1B4B, emissive: 0x000000 })
+        );
+        node.position.set(-18.5 + c * 2.1, 1.5, 1.0 + r * 1.25);
+        groups.control.add(node);
+        registerInteractable(node, {
+          kind: 'PLA_NODE',
+          title: `Control Unit PLA Crosspoint [${r}, ${c}]`,
+          layer: 'Control Unit Matrix',
+          getDetails: () => [
+            `Active Opcode: 0x${sim.cuActiveOpcode.toString(16).toUpperCase()}`,
+            `Active Micro-Signals: ${sim.cuActiveSignals.join(', ') || 'NONE'}`
+          ]
+        });
+        plaNodes.push({ mesh: node, row: r, col: c });
+      }
+    }
+
+    // Register File (R0..R3 = 4 x 8 = 32 Flip-Flop Bit Cubes using THREE.InstancedMesh)
+    const regInstGeo = new THREE.BoxGeometry(1.15, 1.15, 1.15);
+    const regInstMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.2 });
+    const regInstMesh = new THREE.InstancedMesh(regInstGeo, regInstMat, 32);
+    const dummyObj = new THREE.Object3D();
+
+    for (let r = 0; r < 4; r++) {
+      for (let b = 0; b < 8; b++) {
+        const idx = r * 8 + b;
+        dummyObj.position.set(-4.5 + b * 1.45, 1.6 + r * 1.55, -12.5);
+        dummyObj.updateMatrix();
+        regInstMesh.setMatrixAt(idx, dummyObj.matrix);
+        regInstMesh.setColorAt(idx, COL_BIT_OFF);
+      }
+    }
+    regInstMesh.instanceMatrix.needsUpdate = true;
+    regInstMesh.instanceColor.needsUpdate = true;
+    groups.core.add(regInstMesh);
+
+    registerInteractable(regInstMesh, {
+      kind: 'REG_FILE_INST',
+      title: 'CPU Register File (R0–R3)',
+      layer: 'CPU Core',
+      getDetails: (instanceId) => {
+        const r = Math.floor((instanceId || 0) / 8);
+        const bit = 7 - ((instanceId || 0) % 8);
+        const val = sim.R[r] || 0;
+        return [
+          `Register: R${r} = 0x${val.toString(16).padStart(2, '0').toUpperCase()} (${val})`,
+          `Bit [${bit}] State: ${(val >> bit) & 1}`,
+          `Binary: ${val.toString(2).padStart(8, '0')}`
+        ];
+      }
+    });
+
+    // ALU V-Block Outer Translucent Shell & Nano-Level Gate Interior (X: +4 to +19, Z: -6 to +10)
+    const aluCenter = new THREE.Vector3(11.5, 3.2, 2.0);
+    const aluShellMat = new THREE.MeshPhysicalMaterial({
+      color: 0x10B981,
+      transparent: true,
+      opacity: 0.28,
+      roughness: 0.15
+    });
+
+    // Classic V-Block shape constructed from extruded/angled wings
+    const aluWingGeo = new THREE.BoxGeometry(15.5, 5.5, 15.5);
+    const aluShellMesh = new THREE.Mesh(aluWingGeo, aluShellMat);
+    aluShellMesh.position.copy(aluCenter);
+    groups.shells.add(aluShellMesh);
+
+    const aluEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(aluWingGeo),
+      new THREE.LineBasicMaterial({ color: 0x10B981, transparent: true, opacity: 0.65 })
+    );
+    aluEdges.position.copy(aluCenter);
+    groups.shells.add(aluEdges);
+
+    // Status Flag Beacons (Z, C, N) on side of ALU
+    const flagMeshes = {};
+    ['Z', 'C', 'N'].forEach((fl, idx) => {
+      const fm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.65, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0x1E293B, emissive: 0x000000 })
+      );
+      fm.position.set(19.8, 2.5, -1.5 + idx * 3.0);
+      groups.core.add(fm);
+      registerInteractable(fm, {
+        kind: 'FLAG_BEACON',
+        title: `ALU Status Flag: ${fl}`,
+        layer: 'ALU Core',
+        getDetails: () => [
+          `Flag ${fl}: ${sim.FLAGS[fl] ? '1 (SET)' : '0 (CLEAR)'}`,
+          `Z=Zero, C=Carry, N=Negative`
+        ]
+      });
+      flagMeshes[fl] = fm;
+    });
+
+    // Nano-Level Gate Interior Inside ALU: 8 Bit-Slices × 5 Gates (XOR1, XOR2, AND1, AND2, OR1) = 40 3D Logic Gates!
+    const aluGateMeshes = [];
+    const gateOrder = ['XOR1', 'XOR2', 'AND1', 'AND2', 'OR1'];
+
+    for (let s = 0; s < 8; s++) {
+      const sliceZ = -4.2 + s * 1.75;
+      for (let g = 0; g < 5; g++) {
+        const gKey = gateOrder[g];
+        const gateX = 5.5 + g * 2.8;
+        const gateY = 1.6 + (g % 2) * 1.4;
+
+        let geo;
+        if (gKey.startsWith('XOR')) {
+          geo = new THREE.OctahedronGeometry(0.62, 0);
+        } else if (gKey.startsWith('AND')) {
+          geo = new THREE.CylinderGeometry(0.52, 0.52, 0.9, 12);
+          geo.rotateZ(Math.PI / 2);
+        } else {
+          geo = new THREE.ConeGeometry(0.58, 1.0, 12);
+          geo.rotateZ(-Math.PI / 2);
+        }
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x1E293B,
+          emissive: 0x000000,
+          roughness: 0.25
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(gateX, gateY, sliceZ);
+        groups.gates.add(mesh);
+
+        // Micro-wire connecting gates across the slice
+        if (g < 4) {
+          const wire = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 0.08, 0.08),
+            new THREE.MeshBasicMaterial({ color: 0x064E3B })
+          );
+          wire.position.set(gateX + 1.4, gateY, sliceZ);
+          groups.gates.add(wire);
+        }
+
+        registerInteractable(mesh, {
+          kind: 'ALU_GATE',
+          slice: s,
+          gateKey: gKey,
+          title: `ALU Slice [${s}] — ${gKey} Gate`,
+          layer: 'Nano Logic Gate',
+          getTruthTable: () => {
+            const gObj = sim.alu.slices[s].gates[gKey];
+            return {
+              type: gObj.type,
+              inA: gObj.inA,
+              inB: gObj.inB,
+              out: gObj.out,
+              rows: TRUTH_TABLES[gObj.type]
+            };
+          },
+          getDetails: () => {
+            const gObj = sim.alu.slices[s].gates[gKey];
+            return [
+              `Gate Type: ${gObj.type} (${gObj.name})`,
+              `Input A: ${gObj.inA} | Input B: ${gObj.inB}`,
+              `Gate Output: ${gObj.out}`
+            ];
+          }
+        });
+
+        aluGateMeshes.push({ mesh, slice: s, gateKey: gKey });
+      }
+    }
+
+    // --- 4.5 LAYER 4: MEMORY & 3D PIXEL MONITOR SUBSYSTEM (Right Wing: X: +30 to +64) ---
+    const memBaseX = 46;
+    const memBaseZ = -1;
+
+    // 64-Byte SRAM + VRAM (8x8 Byte Grid = 512 Individual Bit Cells via InstancedMesh!)
+    const sramInstGeo = new THREE.BoxGeometry(0.32, 0.65, 0.32);
+    const sramInstMat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.15 });
+    const sramInstMesh = new THREE.InstancedMesh(sramInstGeo, sramInstMat, 512);
+
+    for (let byteAddr = 0; byteAddr < 64; byteAddr++) {
+      const row = Math.floor(byteAddr / 8);
+      const col = byteAddr % 8;
+      const cellCenterX = memBaseX - 11.5 + col * 3.3;
+      const cellCenterZ = memBaseZ - 10.5 + row * 3.0;
+
+      for (let bit = 0; bit < 8; bit++) {
+        const idx = byteAddr * 8 + bit;
+        const bx = cellCenterX - 1.05 + (bit % 4) * 0.7;
+        const bz = cellCenterZ - 0.35 + Math.floor(bit / 4) * 0.7;
+        dummyObj.position.set(bx, 1.2, bz);
+        dummyObj.updateMatrix();
+        sramInstMesh.setMatrixAt(idx, dummyObj.matrix);
+        sramInstMesh.setColorAt(idx, COL_BIT_OFF);
+      }
+    }
+    sramInstMesh.instanceMatrix.needsUpdate = true;
+    sramInstMesh.instanceColor.needsUpdate = true;
+    groups.core.add(sramInstMesh);
+
+    registerInteractable(sramInstMesh, {
+      kind: 'SRAM_INST',
+      title: '64-Byte SRAM / VRAM Array',
+      layer: 'Memory Subsystem',
+      getDetails: (instanceId) => {
+        const byteAddr = Math.floor((instanceId || 0) / 8);
+        const bit = 7 - ((instanceId || 0) % 8);
+        const val = sim.sram[byteAddr] || 0;
+        const region = byteAddr >= 0x38 ? 'VRAM (Video RAM)' : (byteAddr >= 0x30 ? 'Stack / Scratchpad' : 'Program ROM/RAM');
+        return [
+          `Address: 0x${byteAddr.toString(16).padStart(2, '0').toUpperCase()} (${region})`,
+          `Byte Value: 0x${val.toString(16).padStart(2, '0').toUpperCase()} ('${val >= 32 && val <= 126 ? String.fromCharCode(val) : '·'}')`,
+          `Bit [${bit}]: ${(val >> bit) & 1}`
+        ];
+      }
+    });
+
+    // Active Row & Column Decoder Highlight Bars on SRAM Grid
+    const sramRowHighlight = new THREE.Mesh(
+      new THREE.BoxGeometry(27.5, 0.3, 2.2),
+      new THREE.MeshBasicMaterial({ color: 0xF59E0B, transparent: true, opacity: 0.0 })
+    );
+    groups.core.add(sramRowHighlight);
+
+    const sramColHighlight = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 0.3, 25.0),
+      new THREE.MeshBasicMaterial({ color: 0x00F5D4, transparent: true, opacity: 0.0 })
+    );
+    groups.core.add(sramColHighlight);
+
+    // 3D Pixel Matrix Monitor (48 Columns × 14 Rows = 672 Emissive 3D Pixel Cubes via InstancedMesh)
+    // Displays 8 Characters (each 5x7 pixels with 1px horizontal spacing, centered vertically)
+    const MON_COLS = 48;
+    const MON_ROWS = 14;
+    const MON_TOTAL_PIXELS = MON_COLS * MON_ROWS;
+    const monCenterX = memBaseX;
+    const monCenterY = 17.5;
+    const monCenterZ = -14.5;
+
+    // Monitor Bezel Frame & Stand
+    const monBezel = new THREE.Mesh(
+      new THREE.BoxGeometry(31.5, 12.2, 1.6),
+      new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.4, metalness: 0.5 })
+    );
+    monBezel.position.set(monCenterX, monCenterY, monCenterZ - 0.5);
+    groups.core.add(monBezel);
+
+    const monStand = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 12.0, 2.0),
+      new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.5 })
+    );
+    monStand.position.set(monCenterX, 6.0, monCenterZ - 0.8);
+    groups.skeletal.add(monStand);
+
+    const pixelGeo = new THREE.BoxGeometry(0.52, 0.52, 0.35);
+    const pixelMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+    const monitorInstMesh = new THREE.InstancedMesh(pixelGeo, pixelMat, MON_TOTAL_PIXELS);
+
+    for (let r = 0; r < MON_ROWS; r++) {
+      for (let c = 0; c < MON_COLS; c++) {
+        const idx = r * MON_COLS + c;
+        const px = monCenterX - (MON_COLS * 0.58) / 2 + c * 0.58;
+        const py = monCenterY + (MON_ROWS * 0.58) / 2 - r * 0.58;
+        dummyObj.position.set(px, py, monCenterZ + 0.35);
+        dummyObj.updateMatrix();
+        monitorInstMesh.setMatrixAt(idx, dummyObj.matrix);
+        monitorInstMesh.setColorAt(idx, COL_PIXEL_OFF);
+      }
+    }
+    monitorInstMesh.instanceMatrix.needsUpdate = true;
+    monitorInstMesh.instanceColor.needsUpdate = true;
+    groups.core.add(monitorInstMesh);
+
+    registerInteractable(monitorInstMesh, {
+      kind: 'MONITOR_PIXEL',
+      title: '3D Emissive Pixel Matrix (48×14)',
+      layer: 'Display Output Layer 4',
+      getDetails: (instanceId) => {
+        const r = Math.floor((instanceId || 0) / MON_COLS);
+        const c = (instanceId || 0) % MON_COLS;
+        const slot = Math.floor(c / 6);
+        const charByte = sim.sram[0x38 + slot] || 0;
+        return [
+          `Pixel Coord: Col ${c}, Row ${r}`,
+          `VRAM Slot: 0x${(0x38 + slot).toString(16).toUpperCase()} ('${charByte >= 32 ? String.fromCharCode(charByte) : ' '}')`,
+          `Driven by 5x7 Character Generator ROM`
+        ];
+      }
+    });
+
+    // --- 4.6 ANIMATED SIGNAL PULSE PARTICLES ALONG TRI-BUS SPLINES ---
+    const NODE_COORDS = {
+      KBD:     new THREE.Vector3(-46, 2.0, 12.5),
+      CU:      new THREE.Vector3(-14, 2.0, 5.0),
+      CPU_PC:  new THREE.Vector3(-12, 2.2, -14.5),
+      CPU_MAR: new THREE.Vector3(-12, 2.2, -11.0),
+      CPU_MDR: new THREE.Vector3(-14, 2.2, -7.5),
+      CPU_IR:  new THREE.Vector3(-14, 2.2, -4.0),
+      REG:     new THREE.Vector3(0,   3.0, -12.5),
+      ALU:     new THREE.Vector3(11.5, 3.2, 2.0),
+      MEM:     new THREE.Vector3(46,  2.0, -1.0),
+      MON:     new THREE.Vector3(46,  17.5, -14.0)
+    };
+
+    const pulseMeshes = [];
+    const pulseSphereGeo = new THREE.SphereGeometry(0.65, 12, 12);
+    for (let i = 0; i < 18; i++) {
+      const pm = new THREE.Mesh(
+        pulseSphereGeo,
+        new THREE.MeshBasicMaterial({ color: 0x00F5D4 })
+      );
+      pm.visible = false;
+      scene.add(pm);
+      pulseMeshes.push(pm);
+    }
+
+    let packetProgress = 0; // 0..1 interpolation within current micro-step
+
+    // --- 4.7 FLOATING 3D TELEMETRY LABELS ---
+    const labelConfigs = [
+      { id: 'lbl-kbd',  pos: new THREE.Vector3(-46, 5.5, -14), title: '4x4 MATRIX KEYBOARD', sub: () => `SCAN ROW${sim.scanRow} | DB:${sim.debounceCounter}/4` },
+      { id: 'lbl-port', pos: new THREE.Vector3(-46, 5.2, 12.5), title: 'KBD_DATA [0xFF00]', sub: () => `0x${sim.kbdDataPort.toString(16).padStart(2,'0').toUpperCase()} | IRQ:${sim.controlBus.IRQ}` },
+      { id: 'lbl-cpu',  pos: new THREE.Vector3(-8, 12.2, -14), title: 'CPU DIE & PIPELINE', sub: () => `PC:0x${sim.PC.toString(16).padStart(4,'0').toUpperCase()} | IR:0x${sim.IR.toString(16).padStart(2,'0').toUpperCase()}` },
+      { id: 'lbl-alu',  pos: new THREE.Vector3(11.5, 9.5, 2.0), title: '8-BIT ALU (NANO GATES)', sub: () => `${sim.alu.op} → 0x${sim.alu.result.toString(16).padStart(2,'0').toUpperCase()}` },
+      { id: 'lbl-sram', pos: new THREE.Vector3(46, 4.8, 12.5), title: '64B SRAM + VRAM', sub: () => `MAR:0x${sim.MAR.toString(16).padStart(2,'0').toUpperCase()}` },
+      { id: 'lbl-mon',  pos: new THREE.Vector3(46, 25.0, -14.5), title: '3D PIXEL MONITOR (5x7 ROM)', sub: () => `CURSOR R2: ${sim.R[2] & 7}` }
+    ];
+
+    const labelElements = labelConfigs.map(cfg => {
+      const el = document.createElement('div');
+      el.className = 'label-3d px-2 py-1 rounded bg-slate-950/85 border border-cyan-500/35 text-[10px] font-mono-code shadow-lg whitespace-nowrap';
+      el.innerHTML = `<div class="font-bold text-cyan-300">${cfg.title}</div><div class="text-slate-300" data-sub></div>`;
+      labelsOverlay.appendChild(el);
+      return { cfg, el, subEl: el.querySelector('[data-sub]') };
+    });
+
+    /***************************************************************************
+     * 5. CAMERA CONTROLLER, SEMANTIC ZOOM & ORBIT INTERACTION
+     ***************************************************************************/
+    const CAMERA_BOOKMARKS = {
+      macro: { pos: new THREE.Vector3(0, 56, 86),   lookAt: new THREE.Vector3(0, 3, 2) },
+      micro: { pos: new THREE.Vector3(-2, 26, 32),  lookAt: new THREE.Vector3(-2, 2, -3) },
+      nano:  { pos: new THREE.Vector3(11.5, 11, 14), lookAt: new THREE.Vector3(11.5, 2.2, 1.5) },
+      chase: { pos: new THREE.Vector3(0, 28, 42),   lookAt: new THREE.Vector3(0, 2, 0) }
+    };
+
+    let currentCameraMode = 'macro';
+    const camTargetPos = CAMERA_BOOKMARKS.macro.pos.clone();
+    const camTargetLook = CAMERA_BOOKMARKS.macro.lookAt.clone();
+    const camCurrentLook = CAMERA_BOOKMARKS.macro.lookAt.clone();
+
+    function setCameraMode(mode) {
+      currentCameraMode = mode;
+      document.querySelectorAll('.cam-btn').forEach(btn => {
+        const active = btn.dataset.cam === mode;
+        btn.classList.toggle('bg-cyan-500/20', active);
+        btn.classList.toggle('text-cyan-300', active);
+        btn.classList.toggle('border-cyan-400/50', active);
+      });
+      if (CAMERA_BOOKMARKS[mode] && mode !== 'chase') {
+        camTargetPos.copy(CAMERA_BOOKMARKS[mode].pos);
+        camTargetLook.copy(CAMERA_BOOKMARKS[mode].lookAt);
+      }
+    }
+
+    // Pointer Drag Orbit & Wheel Zoom
+    let isDragging = false;
+    let prevPointer = { x: 0, y: 0 };
+    let pointerDownPos = { x: 0, y: 0 };
+
+    container.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      prevPointer = { x: e.clientX, y: e.clientY };
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      if (dist < 5) handleCanvasClick(e);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (isDragging) {
+        if (currentCameraMode === 'chase') setCameraMode('macro');
+        const dx = (e.clientX - prevPointer.x) * 0.18;
+        const dy = (e.clientY - prevPointer.y) * 0.18;
+        camTargetPos.x -= dx;
+        camTargetPos.y = Math.max(5, Math.min(110, camTargetPos.y + dy));
+        prevPointer = { x: e.clientX, y: e.clientY };
+      } else {
+        handleCanvasHover(e);
+      }
+    });
+
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (currentCameraMode === 'chase') setCameraMode('macro');
+      const dir = new THREE.Vector3().subVectors(camTargetLook, camTargetPos).normalize();
+      const step = -e.deltaY * 0.04;
+      const nextPos = camTargetPos.clone().addScaledVector(dir, step);
+      if (nextPos.distanceTo(camTargetLook) > 7 && nextPos.distanceTo(camTargetLook) < 150) {
+        camTargetPos.copy(nextPos);
+      }
+    }, { passive: false });
+
+    // Raycasting for 3D Keycaps, Gates, Registers, Wires & SRAM
+    const raycaster = new THREE.Raycaster();
+    const mouseNDC = new THREE.Vector2();
+
+    function handleCanvasClick(e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouseNDC, camera);
+      const hits = raycaster.intersectObjects(interactables, false);
+      if (hits.length > 0) {
+        const hit = hits[0];
+        const meta = hit.object.userData;
+        if (meta && meta.kind === 'KEYCAP') {
+          triggerKeyPressAndSync(meta.keyChar);
+        }
+      }
+    }
+
+    function handleCanvasHover(e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouseNDC, camera);
+      const hits = raycaster.intersectObjects(interactables, false);
+
+      if (hits.length > 0) {
+        const hit = hits[0];
+        const meta = hit.object.userData;
+        if (!meta) return;
+
+        hoverTooltip.classList.remove('hidden');
+        hoverTooltip.style.left = `${Math.min(window.innerWidth - 290, e.clientX + 14)}px`;
+        hoverTooltip.style.top = `${Math.min(window.innerHeight - 200, e.clientY + 14)}px`;
+
+        document.getElementById('tt-title').textContent = meta.title;
+        document.getElementById('tt-badge').textContent = meta.layer;
+
+        const details = meta.getDetails ? meta.getDetails(hit.instanceId) : [];
+        document.getElementById('tt-body').innerHTML = details.map(line => `<div>${line}</div>`).join('');
+
+        const ttTableEl = document.getElementById('tt-truthtable');
+        if (meta.getTruthTable) {
+          const tt = meta.getTruthTable();
+          ttTableEl.classList.remove('hidden');
+          let html = `<div class="text-[10px] text-emerald-300 font-bold mb-1">${tt.type} GATE TRUTH TABLE</div>`;
+          html += `<table class="w-full text-center text-[10px] font-mono-code border-collapse">`;
+          tt.rows.forEach((r, idx) => {
+            if (idx === 0) {
+              html += `<tr class="text-slate-400 border-b border-slate-700">${r.map(c => `<th class="py-0.5">${c}</th>`).join('')}</tr>`;
+            } else {
+              const activeRow = (r.length === 3 && Number(r[0]) === tt.inA && Number(r[1]) === tt.inB) ||
+                                (r.length === 2 && Number(r[0]) === tt.inA);
+              html += `<tr class="${activeRow ? 'bg-emerald-500/30 text-emerald-200 font-bold' : 'text-slate-400'}">${r.map(c => `<td class="py-0.5">${c}</td>`).join('')}</tr>`;
+            }
+          });
+          html += `</table>`;
+          ttTableEl.innerHTML = html;
+        } else {
+          ttTableEl.classList.add('hidden');
+        }
+      } else {
+        hoverTooltip.classList.add('hidden');
+      }
+    }
+
+    /***************************************************************************
+     * 6. STATE BRIDGE: SYNC EMULATOR STATE TO 3D SCENE & 2D HUD
+     ***************************************************************************/
+    function sync3DHardwareState() {
+      // 1. Update 4x4 Matrix Scan Wires & Keycaps
+      for (let i = 0; i < 4; i++) {
+        const isRowScanned = (sim.scanRow === i);
+        rowWireMeshes[i].material.color.setHex(isRowScanned ? 0xF59E0B : 0x334155);
+        const isColActive = sim.pressedKey && sim.pressedKey.col === i;
+        colWireMeshes[i].material.color.setHex(isColActive ? 0x00F5D4 : 0x334155);
+      }
+
+      keycapMeshes.forEach(k => {
+        const isPressed = sim.pressedKey && sim.pressedKey.char === k.char;
+        k.mesh.position.y = isPressed ? (k.baseY - 0.35) : k.baseY;
+        k.mesh.material.color.setHex(isPressed ? 0x00F5D4 : 0x1E293B);
+        k.mesh.material.emissive.setHex(isPressed ? 0x008B74 : 0x000000);
+      });
+
+      // 2. Update KBD_DATA (0xFF00) 8-bit port meshes
+      for (let b = 0; b < 8; b++) {
+        const bitVal = (sim.kbdDataPort >> (7 - b)) & 1;
+        kbdPortBitMeshes[b].material.color.setHex(bitVal ? 0x00F5D4 : 0x111827);
+        kbdPortBitMeshes[b].material.emissive.setHex(bitVal ? 0x007A6A : 0x000000);
+      }
+
+      // 3. Update Tri-Bus Traces
+      for (let i = 0; i < 16; i++) {
+        const bitVal = (sim.addressBus >> (15 - i)) & 1;
+        addrBusMeshes[i].material.color.setHex(bitVal ? 0xF59E0B : 0x27272A);
+      }
+      for (let i = 0; i < 8; i++) {
+        const bitVal = (sim.dataBus >> (7 - i)) & 1;
+        dataBusMeshes[i].material.color.setHex(bitVal ? 0x00F5D4 : 0x1E293B);
+      }
+      ctrlBusMeshes.forEach(c => {
+        const active = sim.controlBus[c.name] === 1;
+        c.mesh.material.color.setHex(active ? (c.name === 'IRQ' || c.name === 'INT_ACK' ? 0xF43F5E : 0xEC4899) : 0x1E1B4B);
+      });
+
+      // 4. Update CPU Special Registers (PC, MAR, MDR, IR)
+      for (let i = 0; i < 16; i++) {
+        const pcBit = (sim.PC >> (15 - i)) & 1;
+        pcBitMeshes[i].material.color.setHex(pcBit ? 0xF59E0B : 0x111827);
+        pcBitMeshes[i].material.emissive.setHex(pcBit ? 0x78350F : 0x000000);
+
+        const marBit = (sim.MAR >> (15 - i)) & 1;
+        marBitMeshes[i].material.color.setHex(marBit ? 0xF59E0B : 0x111827);
+        marBitMeshes[i].material.emissive.setHex(marBit ? 0x78350F : 0x000000);
+      }
+      for (let i = 0; i < 8; i++) {
+        const mdrBit = (sim.MDR >> (7 - i)) & 1;
+        mdrBitMeshes[i].material.color.setHex(mdrBit ? 0x00F5D4 : 0x111827);
+        mdrBitMeshes[i].material.emissive.setHex(mdrBit ? 0x006655 : 0x000000);
+
+        const irBit = (sim.IR >> (7 - i)) & 1;
+        irBitMeshes[i].material.color.setHex(irBit ? 0xEC4899 : 0x111827);
+        irBitMeshes[i].material.emissive.setHex(irBit ? 0x831843 : 0x000000);
+      }
+
+      // 5. Update Control Unit PLA Matrix
+      plaNodes.forEach(node => {
+        const isRowActive = (sim.cuActiveOpcode % 8) === node.row;
+        const isColActive = node.col < sim.cuActiveSignals.length;
+        const lit = isRowActive && isColActive;
+        node.mesh.material.color.setHex(lit ? 0xEC4899 : 0x1E1B4B);
+        node.mesh.material.emissive.setHex(lit ? 0x9D174D : 0x000000);
+      });
+
+      // 6. Update Register File (R0..R3) InstancedMesh
+      for (let r = 0; r < 4; r++) {
+        const val = sim.R[r] & 0xFF;
+        for (let b = 0; b < 8; b++) {
+          const bitVal = (val >> (7 - b)) & 1;
+          regInstMesh.setColorAt(r * 8 + b, bitVal ? COL_BIT_ON_CYAN : COL_BIT_OFF);
+        }
+      }
+      regInstMesh.instanceColor.needsUpdate = true;
+
+      // 7. Update ALU Status Flag Beacons & 40 Internal Nano Logic Gates
+      ['Z', 'C', 'N'].forEach(fl => {
+        const on = sim.FLAGS[fl] === 1;
+        flagMeshes[fl].material.color.setHex(on ? 0x10B981 : 0x1E293B);
+        flagMeshes[fl].material.emissive.setHex(on ? 0x059669 : 0x000000);
+      });
+
+      aluGateMeshes.forEach(item => {
+        const gObj = sim.alu.slices[item.slice].gates[item.gateKey];
+        const high = gObj.out === 1;
+        item.mesh.material.color.setHex(high ? 0x00F5D4 : 0x1E293B);
+        item.mesh.material.emissive.setHex(high ? 0x047857 : 0x000000);
+      });
+
+      // 8. Update 64-Byte SRAM + VRAM (512 bit cells) & Row/Col Decoder Bars
+      for (let byteAddr = 0; byteAddr < 64; byteAddr++) {
+        const val = sim.sram[byteAddr];
+        const isVRAM = byteAddr >= 0x38;
+        for (let bit = 0; bit < 8; bit++) {
+          const bitVal = (val >> (7 - bit)) & 1;
+          const idx = byteAddr * 8 + bit;
+          if (bitVal) {
+            sramInstMesh.setColorAt(idx, isVRAM ? COL_BIT_ON_EMERALD : COL_BIT_ON_AMBER);
+          } else {
+            sramInstMesh.setColorAt(idx, isVRAM ? COL_VRAM_OFF : COL_BIT_OFF);
+          }
+        }
+      }
+      sramInstMesh.instanceColor.needsUpdate = true;
+
+      if (sim.activeMemCell >= 0) {
+        const r = Math.floor(sim.activeMemCell / 8);
+        const c = sim.activeMemCell % 8;
+        sramRowHighlight.position.set(memBaseX, 1.65, memBaseZ - 10.5 + r * 3.0);
+        sramColHighlight.position.set(memBaseX - 11.5 + c * 3.3, 1.65, memBaseZ);
+        sramRowHighlight.material.opacity = 0.45;
+        sramColHighlight.material.opacity = 0.45;
+      } else {
+        sramRowHighlight.material.opacity = 0.0;
+        sramColHighlight.material.opacity = 0.0;
+      }
+
+      // 9. Update 3D Pixel Monitor (48x14 Pixels) from VRAM 0x38..0x3F via 5x7 Font ROM
+      for (let r = 0; r < MON_ROWS; r++) {
+        for (let c = 0; c < MON_COLS; c++) {
+          const idx = r * MON_COLS + c;
+          const charSlot = Math.floor(c / 6);
+          const colInChar = c % 6;
+          let pixelLit = false;
+
+          if (charSlot < 8 && colInChar < 5 && r >= 3 && r < 10) {
+            const asciiByte = sim.sram[0x38 + charSlot];
+            const glyph = getGlyphBitmap(asciiByte);
+            const glyphRow = glyph[r - 3] || 0;
+            pixelLit = ((glyphRow >> (4 - colInChar)) & 1) === 1;
+          } else if (r === 11 && charSlot === (sim.R[2] & 0x07) && colInChar < 5) {
+            // Blinking underline cursor at current R2 slot
+            pixelLit = true;
+          }
+
+          monitorInstMesh.setColorAt(idx, pixelLit ? COL_PIXEL_ON : COL_PIXEL_OFF);
+        }
+      }
+      monitorInstMesh.instanceColor.needsUpdate = true;
+    }
+
+    function sync2DHUD() {
+      // Story Banner
+      document.getElementById('story-banner').textContent = sim.storyText;
+
+      // 5-Stage Pipeline Pills
+      const nextStageIndex = (sim.stageIndex + 4) % 5; // Most recently executed stage
+      const activeStage = sim.stages[nextStageIndex];
+      ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(st => {
+        const el = document.getElementById(`stage-${st}`);
+        if (el) el.classList.toggle('active', st === activeStage);
+      });
+      const intBadge = document.getElementById('stage-INT');
+      intBadge.classList.toggle('hidden', !(sim.controlBus.IRQ || sim.controlBus.INT_ACK || sim.inISR));
+
+      // Scan Row & Debounce Readout
+      document.getElementById('scan-row-badge').textContent = `SCAN: ROW${sim.scanRow}`;
+      document.getElementById('debounce-val').textContent = `${sim.debounceCounter}/4`;
+      const dbLeds = document.getElementById('debounce-leds').querySelectorAll('span:not(#debounce-val)');
+      dbLeds.forEach((led, idx) => {
+        const on = idx < sim.debounceCounter;
+        led.className = `w-2.5 h-2.5 rounded-sm border ${on ? 'bg-cyan-400 border-cyan-300 shadow-[0_0_6px_#00F5D4]' : 'bg-slate-800 border-slate-700'}`;
+      });
+
+      const kbdChar = (sim.kbdDataPort >= 32 && sim.kbdDataPort <= 126) ? String.fromCharCode(sim.kbdDataPort) : '·';
+      document.getElementById('kbd-data-readout').textContent = `0x${sim.kbdDataPort.toString(16).padStart(2,'0').toUpperCase()} ('${kbdChar}')`;
+
+      const irqEl = document.getElementById('irq-line-readout');
+      if (sim.controlBus.IRQ) {
+        irqEl.textContent = '1 (ASSERTED)';
+        irqEl.className = 'px-1.5 py-0.2 rounded bg-rose-500/30 text-rose-300 font-bold border border-rose-500/50 animate-pulse';
+      } else {
+        irqEl.textContent = sim.inISR ? 'IN ISR (0x0010)' : '0 (LOW)';
+        irqEl.className = `px-1.5 py-0.2 rounded ${sim.inISR ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'}`;
+      }
+
+      // Highlight active 2D keypad button
+      document.querySelectorAll('.keypad-btn-2d').forEach(btn => {
+        const isCurrent = sim.pressedKey && sim.pressedKey.char === btn.dataset.key;
+        btn.classList.toggle('neon-border-cyan', Boolean(isCurrent));
+        btn.classList.toggle('bg-cyan-500/25', Boolean(isCurrent));
+      });
+
+      // VRAM 8-Character Slots
+      const vramContainer = document.getElementById('vram-char-slots');
+      let vramHtml = '';
+      for (let i = 0; i < 8; i++) {
+        const byteVal = sim.sram[0x38 + i];
+        const ch = (byteVal >= 32 && byteVal <= 126) ? String.fromCharCode(byteVal) : '·';
+        const isCursor = (sim.R[2] & 0x07) === i;
+        vramHtml += `
+          <div class="p-1 rounded border ${isCursor ? 'border-emerald-400 bg-emerald-500/15' : 'border-slate-800 bg-slate-950/80'}">
+            <div class="text-xs font-bold ${byteVal ? 'text-emerald-300' : 'text-slate-600'}">${ch}</div>
+            <div class="text-[8px] text-slate-500">${(0x38 + i).toString(16).toUpperCase()}</div>
+          </div>`;
+      }
+      vramContainer.innerHTML = vramHtml;
+
+      // CPU Special Registers & Flags
+      document.getElementById('reg-PC').textContent  = `0x${sim.PC.toString(16).padStart(4,'0').toUpperCase()}`;
+      document.getElementById('reg-MAR').textContent = `0x${sim.MAR.toString(16).padStart(4,'0').toUpperCase()}`;
+      document.getElementById('reg-MDR').textContent = `0x${sim.MDR.toString(16).padStart(2,'0').toUpperCase()}`;
+      document.getElementById('reg-IR').textContent  = `0x${sim.IR.toString(16).padStart(2,'0').toUpperCase()}`;
+
+      ['Z', 'C', 'N'].forEach(fl => {
+        const el = document.getElementById(`flag-${fl}`);
+        const on = sim.FLAGS[fl] === 1;
+        el.textContent = `${fl}:${sim.FLAGS[fl]}`;
+        el.className = `px-1.5 py-0.5 rounded font-bold ${on ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}`;
+      });
+
+      // General Purpose Registers R0..R3
+      const gprLabels = ['R0 (ACC)', 'R1 (ALU)', 'R2 (CUR)', 'R3 (INC)'];
+      let gprHtml = '';
+      for (let r = 0; r < 4; r++) {
+        const val = sim.R[r] & 0xFF;
+        const bin = val.toString(2).padStart(8, '0');
+        gprHtml += `
+          <div class="flex items-center justify-between bg-slate-950/60 px-2 py-1 rounded border border-slate-800/80">
+            <span class="text-slate-400 text-[10px] w-16">${gprLabels[r]}</span>
+            <div class="flex gap-0.5">
+              ${bin.split('').map(bit => `<span class="w-3.5 h-3.5 flex items-center justify-center rounded-[2px] text-[9px] ${bit === '1' ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50' : 'bg-slate-900 text-slate-600'}">${bit}</span>`).join('')}
+            </div>
+            <span class="text-cyan-300 font-semibold w-10 text-right">0x${val.toString(16).padStart(2,'0').toUpperCase()}</span>
+          </div>`;
+      }
+      document.getElementById('gpr-container').innerHTML = gprHtml;
+
+      // Tri-Bus Values
+      document.getElementById('bus-addr-val').textContent = `0x${sim.addressBus.toString(16).padStart(4,'0').toUpperCase()} [${sim.addressBus.toString(2).padStart(16,'0')}]`;
+      document.getElementById('bus-data-val').textContent = `0x${sim.dataBus.toString(16).padStart(2,'0').toUpperCase()} [${sim.dataBus.toString(2).padStart(8,'0')}]`;
+
+      const ctrlMap = [
+        ['ctrl-CLK', sim.controlBus.CLK],
+        ['ctrl-IRQ', sim.controlBus.IRQ],
+        ['ctrl-IACK', sim.controlBus.INT_ACK],
+        ['ctrl-MRD', sim.controlBus.MEM_RD],
+        ['ctrl-MWR', sim.controlBus.MEM_WR],
+        ['ctrl-VSYNC', sim.controlBus.VRAM_SYNC]
+      ];
+      ctrlMap.forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        el.className = `px-1 rounded ${val ? 'bg-pink-500/30 text-pink-200 border border-pink-400/50 font-bold' : 'bg-slate-800 text-slate-500'}`;
+      });
+
+      // ALU 8-Slice Summary
+      document.getElementById('alu-op-badge').textContent = `OP: ${sim.alu.op}`;
+      document.getElementById('alu-inputs-summary').textContent = `INA: 0x${sim.alu.inA.toString(16).padStart(2,'0').toUpperCase()} | INB: 0x${sim.alu.inB.toString(16).padStart(2,'0').toUpperCase()}`;
+      document.getElementById('alu-out-summary').textContent = `OUT: 0x${sim.alu.result.toString(16).padStart(2,'0').toUpperCase()}`;
+
+      let slicesHtml = '';
+      for (let i = 7; i >= 0; i--) {
+        const sl = sim.alu.slices[i];
+        slicesHtml += `
+          <div class="p-1 rounded border ${sl.outBit ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200' : 'border-slate-800 bg-slate-950/70 text-slate-500'}">
+            <div class="text-[8px] text-slate-400">b${i}</div>
+            <div class="font-bold text-xs">${sl.outBit}</div>
+            <div class="text-[8px]">c:${sl.cout}</div>
+          </div>`;
+      }
+      document.getElementById('alu-slices-grid').innerHTML = slicesHtml;
+
+      // Disassembler Table
+      document.getElementById('cycle-counter').textContent = `Cycles: ${sim.cycleCount}`;
+      const disasmEl = document.getElementById('disasm-list');
+      const sortedAddrs = Object.keys(sim.programMeta).map(Number).sort((a, b) => a - b);
+      let disasmHtml = '';
+      sortedAddrs.forEach(addr => {
+        const item = sim.programMeta[addr];
+        const isCurrent = sim.PC === addr;
+        const isISR = addr >= 0x0010;
+        disasmHtml += `
+          <div class="flex items-center justify-between px-2 py-1 rounded ${isCurrent ? 'bg-amber-500/25 border border-amber-400/60 text-amber-200 font-bold' : 'bg-slate-950/50 text-slate-400'}">
+            <div class="flex items-center gap-2">
+              <span class="${isISR ? 'text-pink-400' : 'text-slate-500'}">0x${addr.toString(16).padStart(4,'0').toUpperCase()}</span>
+              <span class="${isCurrent ? 'text-white' : 'text-cyan-200'}">${item.mnemonic}</span>
+            </div>
+            <span class="text-[9px] text-slate-500 truncate max-w-[115px]" title="${item.comment}">${item.comment}</span>
+          </div>`;
+      });
+      disasmEl.innerHTML = disasmHtml;
+    }
+
+    function updateAllVisuals() {
+      sync3DHardwareState();
+      sync2DHUD();
+    }
+
+    /***************************************************************************
+     * 7. UI CONTROLS, KEYPAD BUILDER & EXECUTION CLOCK ENGINE
+     ***************************************************************************/
+    function build2DKeypad() {
+      const grid = document.getElementById('keypad-grid');
+      let html = '';
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          const k = KEYPAD_LAYOUT[r][c];
+          html += `
+            <button data-key="${k}" class="keypad-btn-2d py-1.5 rounded-lg bg-slate-900 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-400 text-xs font-mono-code font-bold text-white transition active:scale-95">
+              ${k}
+              <span class="block text-[8px] font-normal text-slate-400">0x${k.charCodeAt(0).toString(16).toUpperCase()}</span>
+            </button>`;
+        }
+      }
+      grid.innerHTML = html;
+      grid.querySelectorAll('.keypad-btn-2d').forEach(btn => {
+        btn.addEventListener('click', () => {
+          triggerKeyPressAndSync(btn.dataset.key);
+        });
+      });
+    }
+
+    function triggerKeyPressAndSync(charStr) {
+      sim.pressKey(charStr);
+      packetProgress = 0;
+      updateAllVisuals();
+    }
+
+    // Physical Keyboard Listener (Type any alphanumeric key directly!)
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement === document.getElementById('custom-char-input')) {
+        if (e.key === 'Enter') {
+          const val = document.getElementById('custom-char-input').value;
+          if (val) triggerKeyPressAndSync(val);
+          document.getElementById('custom-char-input').value = '';
+        }
+        return;
+      }
+      if (/^[a-zA-Z0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        triggerKeyPressAndSync(e.key.toUpperCase());
+      }
+    });
+
+    document.getElementById('btn-send-char').addEventListener('click', () => {
+      const inp = document.getElementById('custom-char-input');
+      const ch = inp.value.trim() || 'A';
+      triggerKeyPressAndSync(ch);
+      inp.value = '';
+    });
+
+    // Camera Bookmark Buttons
+    document.querySelectorAll('.cam-btn').forEach(btn => {
+      btn.addEventListener('click', () => setCameraMode(btn.dataset.cam));
+    });
+
+    // Anatomical Layer Peel Checkboxes
+    document.getElementById('layer-shells').addEventListener('change', (e) => {
+      groups.shells.visible = e.target.checked;
+    });
+    document.getElementById('layer-control').addEventListener('change', (e) => {
+      groups.control.visible = e.target.checked;
+    });
+    document.getElementById('layer-buses').addEventListener('change', (e) => {
+      groups.buses.visible = e.target.checked;
+    });
+    document.getElementById('layer-gates').addEventListener('change', (e) => {
+      groups.gates.visible = e.target.checked;
+    });
+    document.getElementById('layer-labels').addEventListener('change', (e) => {
+      labelsOverlay.style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // ISR ALU Mode Select
+    document.getElementById('alu-isr-mode').addEventListener('change', (e) => {
+      sim.isrAluMode = e.target.value;
+      sim.applyIsrAluMode();
+      updateAllVisuals();
+    });
+
+    // Clear VRAM Button
+    document.getElementById('btn-clear-vram').addEventListener('click', () => {
+      for (let i = 0x38; i <= 0x3F; i++) sim.sram[i] = 0;
+      sim.R[2] = 0;
+      updateAllVisuals();
+    });
+
+    // Clock Execution Controls
+    let isAutoRunning = true;
+    let clockHz = 2.0;
+    let stepUntilScreenActive = false;
+
+    function sliderToHz(val) {
+      // Exponential mapping from 0.5 Hz (val=0) to 100 Hz (val=100)
+      const num = Number(val);
+      return Number((0.5 * Math.pow(200, num / 100)).toFixed(num < 30 ? 1 : 0));
+    }
+
+    const clockSlider = document.getElementById('clock-slider');
+    clockSlider.addEventListener('input', (e) => {
+      clockHz = sliderToHz(e.target.value);
+      document.getElementById('clock-hz-label').textContent = `${clockHz} Hz`;
+    });
+
+    function setAutoRun(state) {
+      isAutoRunning = state;
+      const dot = document.getElementById('run-dot');
+      const lbl = document.getElementById('run-label');
+      const btn = document.getElementById('btn-run-toggle');
+      if (isAutoRunning) {
+        lbl.textContent = 'Auto-Run: ON';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 transition';
+      } else {
+        lbl.textContent = 'Auto-Run: PAUSED';
+        dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 flex items-center gap-1.5 transition';
+      }
+    }
+
+    document.getElementById('btn-run-toggle').addEventListener('click', () => {
+      stepUntilScreenActive = false;
+      setAutoRun(!isAutoRunning);
+    });
+
+    document.getElementById('btn-step-micro').addEventListener('click', () => {
+      setAutoRun(false);
+      stepUntilScreenActive = false;
+      sim.stepMicroCycle();
+      packetProgress = 0;
+      updateAllVisuals();
+    });
+
+    document.getElementById('btn-step-instr').addEventListener('click', () => {
+      setAutoRun(false);
+      stepUntilScreenActive = false;
+      // Step until stageIndex returns to 0 (completing all 5 phases T0..T4 of current instruction)
+      do {
+        sim.stepMicroCycle();
+      } while (sim.stageIndex !== 0 && !sim.halted);
+      packetProgress = 0;
+      updateAllVisuals();
+    });
+
+    document.getElementById('btn-step-screen').addEventListener('click', () => {
+      // If no key is currently pending or in ISR, press the next demonstration character ('A', 'S', 'T', 'R', 'A')
+      if (!sim.pressedKey && !sim.inISR) {
+        const demoChars = ['A', 'S', 'T', 'R', 'A', '1', '2', '3'];
+        const nextChar = demoChars[sim.R[2] % demoChars.length];
+        sim.pressKey(nextChar);
+      }
+      stepUntilScreenActive = true;
+      setAutoRun(true);
+      updateAllVisuals();
+    });
+
+    document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+      sound.enabled = !sound.enabled;
+      const icon = document.getElementById('icon-audio-on');
+      icon.classList.toggle('text-cyan-300', sound.enabled);
+      icon.classList.toggle('text-slate-600', !sound.enabled);
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      stepUntilScreenActive = false;
+      sim.reset();
+      packetProgress = 0;
+      updateAllVisuals();
+    });
+
+    /***************************************************************************
+     * 8. MAIN RENDER & INTERPOLATION LOOP (60 FPS Decoupled from Clock Hz)
+     ***************************************************************************/
+    let lastFrameTime = performance.now();
+    let tickAccumulator = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      const effectiveHz = stepUntilScreenActive ? Math.max(clockHz, 8.0) : clockHz;
+      const stepDuration = 1.0 / effectiveHz;
+
+      if (isAutoRunning) {
+        tickAccumulator += dt;
+        while (tickAccumulator >= stepDuration) {
+          tickAccumulator -= stepDuration;
+          const res = sim.stepMicroCycle();
+          packetProgress = 0;
+          if (stepUntilScreenActive && res.vramUpdated) {
+            stepUntilScreenActive = false;
+            setAutoRun(false);
+            break;
+          }
+        }
+        packetProgress = Math.min(1.0, tickAccumulator / stepDuration);
+      } else {
+        // When paused/manual-stepping, smoothly loop packet animation along active traces
+        packetProgress = (packetProgress + dt * 0.85) % 1.0;
+      }
+
+      // 1. Animate Active Signal Pulse Spheres along Bus Splines
+      pulseMeshes.forEach(pm => { pm.visible = false; });
+      let chaseMidpoint = null;
+
+      sim.activePackets.forEach((pkt, idx) => {
+        if (idx >= pulseMeshes.length) return;
+        const fromVec = NODE_COORDS[pkt.from] || NODE_COORDS.CPU_PC;
+        const toVec = NODE_COORDS[pkt.to] || NODE_COORDS.MEM;
+
+        // Route via Tri-Bus Spine (Z: +20) for realistic motherboard trace pathing
+        const busZ = pkt.bus === 'ADDR' ? 19.5 : (pkt.bus === 'DATA' ? 24.5 : 28.0);
+        const p0 = fromVec;
+        const p1 = new THREE.Vector3(fromVec.x, 1.2, busZ);
+        const p2 = new THREE.Vector3(toVec.x, 1.2, busZ);
+        const p3 = toVec;
+
+        // Spawn 2 staggered pulse spheres per active packet
+        for (let k = 0; k < 2; k++) {
+          const meshIdx = idx * 2 + k;
+          if (meshIdx >= pulseMeshes.length) continue;
+          const pm = pulseMeshes[meshIdx];
+          pm.visible = true;
+          pm.material.color.setHex(pkt.color);
+
+          const t = (packetProgress + k * 0.35) % 1.0;
+          const pos = new THREE.Vector3();
+          if (t < 0.25) {
+            pos.lerpVectors(p0, p1, t / 0.25);
+          } else if (t < 0.75) {
+            pos.lerpVectors(p1, p2, (t - 0.25) / 0.5);
+          } else {
+            pos.lerpVectors(p2, p3, (t - 0.75) / 0.25);
+          }
+          pm.position.copy(pos);
+          if (idx === 0 && k === 0) chaseMidpoint = pos.clone();
+        }
+      });
+
+      // 2. Follow-Signal Camera ("Packet Chase Mode")
+      if (currentCameraMode === 'chase') {
+        const targetFocus = chaseMidpoint || NODE_COORDS[sim.focusTarget] || NODE_COORDS.CPU_PC;
+        camTargetLook.lerp(targetFocus, 0.08);
+        camTargetPos.set(targetFocus.x, targetFocus.y + 22, targetFocus.z + 32);
+      }
+
+      // Smooth Camera Lerp
+      camera.position.lerp(camTargetPos, 0.08);
+      camCurrentLook.lerp(camTargetLook, 0.08);
+      camera.lookAt(camCurrentLook);
+
+      // 3. Semantic Distance-Based LOD & X-Ray Shell Opacity Fading
+      const camDist = camera.position.distanceTo(camCurrentLook);
+      const lodBadge = document.getElementById('lod-indicator');
+      if (camDist > 62) {
+        cpuShellMat.opacity = 0.42;
+        aluShellMat.opacity = 0.48;
+        lodBadge.textContent = 'LOD: MACRO';
+      } else if (camDist > 26) {
+        cpuShellMat.opacity = 0.14;
+        aluShellMat.opacity = 0.28;
+        lodBadge.textContent = 'LOD: MICRO (CPU)';
+      } else {
+        cpuShellMat.opacity = 0.05;
+        aluShellMat.opacity = 0.07;
+        lodBadge.textContent = 'LOD: NANO (GATES)';
+      }
+
+      // 4. Project 3D Floating Telemetry Labels to 2D Screen Coordinates
+      if (document.getElementById('layer-labels').checked) {
+        const halfW = window.innerWidth / 2;
+        const halfH = window.innerHeight / 2;
+        labelElements.forEach(item => {
+          const v = item.cfg.pos.clone().project(camera);
+          if (v.z > 1) {
+            item.el.style.opacity = '0';
+          } else {
+            const x = (v.x * halfW) + halfW;
+            const y = -(v.y * halfH) + halfH;
+            item.el.style.left = `${x}px`;
+            item.el.style.top = `${y}px`;
+            item.el.style.opacity = '1';
+            item.subEl.textContent = item.cfg.sub();
+          }
+        });
+      }
+
+      // Sync visual buffers when auto-running
+      if (isAutoRunning) {
+        updateAllVisuals();
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Responsive Viewport Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Initialize App on Load
+    window.onload = () => {
+      build2DKeypad();
+      // Trigger an initial key ('A') into the pipeline so the user immediately sees the live hardware story in motion
+      sim.pressKey('A');
+      updateAllVisuals();
+      requestAnimationFrame(animate);
+    };
+    }
+  </script>
+</body>
+</html>

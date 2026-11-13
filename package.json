@@ -1,0 +1,14 @@
+{
+  "name": "inside-the-machine",
+  "version": "5.1.0",
+  "description": "A photoreal, hand-written WebGL2 3D computer you can take apart: from heat-sink to silicon to a live RISC-V datapath. Zero runtime dependencies.",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node tests/run_verification.js",
+    "test:e2e": "node tests/e2e-browser.js"
+  },
+  "keywords": ["webgl2", "risc-v", "computer-architecture", "education", "3d", "cpu", "simulator", "pbr", "no-dependencies", "digital-logic"],
+  "devDependencies": { "playwright": "^1.45.0" }
+}
